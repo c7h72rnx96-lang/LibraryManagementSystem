@@ -13,11 +13,13 @@ const app = express();
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: [
+      "http://localhost:5173",
+      "https://friendly-creponne-7f3883.netlify.app",
+    ],
     credentials: true,
   }),
 );
-
 app.use(express.json());
 app.use("/uploads", express.static("src/uploads")); // <-- NEW: Makes images viewable
 

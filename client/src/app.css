@@ -1,0 +1,141 @@
+/* =========================
+   GLOBAL
+========================= */
+
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Poppins", sans-serif;
+  background: #f4f7fb;
+  color: #1f2937;
+}
+
+a {
+  text-decoration: none;
+}
+
+.main-content {
+  padding: 30px;
+}
+
+/* =========================
+   CARD
+========================= */
+
+.card {
+  border: none !important;
+  border-radius: 16px !important;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  transition: 0.25s ease;
+}
+
+.card:hover {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* =========================
+   BUTTON
+========================= */
+
+.btn {
+  border-radius: 10px !important;
+  font-weight: 500;
+}
+
+.btn-primary {
+  background: #2563eb !important;
+  border: none !important;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8 !important;
+}
+
+.btn-outline-primary {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.btn-outline-primary:hover {
+  background: #2563eb;
+  color: #fff;
+}
+
+/* =========================
+   INPUT
+========================= */
+
+.form-control,
+.form-select {
+  border-radius: 10px !important;
+  border: 1px solid #dbe3ef !important;
+  height: 46px;
+}
+
+.form-control:focus,
+.form-select:focus {
+  box-shadow: none !important;
+  border-color: #2563eb !important;
+}
+
+/* =========================
+   TABLE
+========================= */
+
+.table {
+  margin-bottom: 0;
+}
+
+.table thead {
+  background: #f8fafc;
+}
+
+.table th {
+  font-weight: 600;
+}
+
+.table td,
+.table th {
+  vertical-align: middle;
+}
+
+/* =========================
+   BADGE
+========================= */
+
+.badge {
+  border-radius: 20px;
+  padding: 6px 12px;
+}
+
+/* =========================
+   IMAGE
+========================= */
+
+img {
+  user-select: none;
+}
+
+/* =========================
+   SCROLLBAR
+========================= */
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 20px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

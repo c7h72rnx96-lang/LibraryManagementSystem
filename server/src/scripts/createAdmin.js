@@ -14,7 +14,7 @@ const createAdmin = async () => {
     });
 
     if (existingAdmin) {
-      console.log("✅ Admin already exists.");
+      console.log(" Admin already exists.");
       process.exit(0);
     }
 
@@ -26,7 +26,7 @@ const createAdmin = async () => {
       password: hashedPassword,
     });
 
-    console.log("✅ Admin account created successfully.");
+    console.log(" Admin account created successfully.");
     console.log("Email: admin@library.com");
     console.log("Password: admin123");
 

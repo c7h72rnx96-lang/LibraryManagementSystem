@@ -10,8 +10,8 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // 1. Check if user is already logged in when they refresh the page
-    const storedUser = localStorage.getItem("user");
-    const storedToken = localStorage.getItem("token");
+    const storedUser = sessionStorage.getItem("user");
+    const storedToken = sessionStorage.getItem("token");
 
     if (storedUser && storedToken) {
       setUser(JSON.parse(storedUser));
@@ -46,8 +46,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     // 5. Delete saved data and reset state
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
     setUser(null);
     toast.success("Logged out successfully!");
   };

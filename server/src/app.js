@@ -17,6 +17,8 @@ app.use(
       "http://localhost:5173",
       "https://friendly-creponne-7f3883.netlify.app",
     ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   }),
 );

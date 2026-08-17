@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { FaSearch, FaPlus, FaEdit, FaTrash, FaBookOpen } from "react-icons/fa";
+
 import BookService from "../../services/BookService.js";
 import GenreService from "../../services/GenreService.js";
 import toast from "react-hot-toast";
+
+// API URL from environment
+const API_URL = import.meta.env.VITE_API_URL;
+
+// Remove /api from the end
+// Example:
+// http://localhost:3000/api
+// becomes:
+// http://localhost:3000
+const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
 
 const Books = () => {
   const [books, setBooks] = useState([]);
@@ -25,6 +36,7 @@ const Books = () => {
       setBooks(booksData);
       setGenres(genresData);
     } catch (error) {
+      console.error(error);
       toast.error("Failed to fetch books");
     } finally {
       setLoading(false);
@@ -36,11 +48,15 @@ const Books = () => {
   }, [searchTerm, selectedGenre]);
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this book?")) return;
+    if (!window.confirm("Delete this book?")) {
+      return;
+    }
 
     try {
       await BookService.delete(id);
+
       toast.success("Book deleted successfully!");
+
       fetchData();
     } catch (error) {
       toast.error(error.message);
@@ -49,9 +65,11 @@ const Books = () => {
 
   return (
     <div className="container-fluid">
+      {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h2 className="fw-bold">Books</h2>
+
           <p className="text-muted mb-0">Manage your library collection</p>
         </div>
 
@@ -61,9 +79,11 @@ const Books = () => {
         </Link>
       </div>
 
+      {/* Search and Filter */}
       <div className="card mb-4">
         <div className="card-body">
           <div className="row g-3">
+            {/* Search */}
             <div className="col-md-8">
               <div className="input-group">
                 <span className="input-group-text bg-white">
@@ -80,6 +100,7 @@ const Books = () => {
               </div>
             </div>
 
+            {/* Genre */}
             <div className="col-md-4">
               <select
                 className="form-select"
@@ -99,6 +120,7 @@ const Books = () => {
         </div>
       </div>
 
+      {/* Loading */}
       {loading ? (
         <div className="text-center mt-5">
           <div className="spinner-border text-primary"></div>
@@ -108,25 +130,34 @@ const Books = () => {
           {books.map((book) => (
             <div key={book.id} className="col-md-6 col-lg-4">
               <div className="card h-100">
+                {/* BOOK IMAGE */}
                 {book.image ? (
                   <img
-                    src={`http://localhost:3000/uploads/${book.image}`}
+                    src={`${SERVER_URL}/uploads/${book.image}`}
                     alt={book.title}
                     className="card-img-top"
                     style={{
                       height: "240px",
                       objectFit: "cover",
                     }}
+                    onError={(e) => {
+                      console.error("Image failed:", e.currentTarget.src);
+
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
                 ) : (
                   <div
                     className="d-flex justify-content-center align-items-center bg-light"
-                    style={{ height: "240px" }}
+                    style={{
+                      height: "240px",
+                    }}
                   >
                     <FaBookOpen size={50} color="#999" />
                   </div>
                 )}
 
+                {/* Book Details */}
                 <div className="card-body d-flex flex-column">
                   <h5 className="fw-bold">{book.title}</h5>
 
@@ -150,6 +181,7 @@ const Books = () => {
                     </span>
                   </p>
 
+                  {/* Buttons */}
                   <div className="mt-auto d-flex gap-2">
                     <Link
                       to={`/books/edit/${book.id}`}
@@ -172,6 +204,7 @@ const Books = () => {
             </div>
           ))}
 
+          {/* No books */}
           {books.length === 0 && (
             <div className="col-12 text-center py-5">
               <FaBookOpen size={60} className="text-secondary mb-3" />

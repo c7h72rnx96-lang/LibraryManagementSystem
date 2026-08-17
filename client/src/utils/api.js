@@ -16,6 +16,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
   // Add authentication token
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
+    console.log("AUTH HEADER:", headers["Authorization"]);
   }
 
   console.log("Request:", `${BASE_URL}${endpoint}`);

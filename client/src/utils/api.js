@@ -2,6 +2,7 @@ const BASE_URL = import.meta.env.VITE_API_URL;
 
 export const fetchAPI = async (endpoint, options = {}) => {
   const token = sessionStorage.getItem("token");
+  console.log("TOKEN:", token);
 
   const headers = {
     ...options.headers,

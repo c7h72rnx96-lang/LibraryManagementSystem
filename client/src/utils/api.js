@@ -2,24 +2,22 @@ const BASE_URL = import.meta.env.VITE_API_URL;
 
 export const fetchAPI = async (endpoint, options = {}) => {
   const token = sessionStorage.getItem("token");
-  console.log("TOKEN:", token);
 
   const headers = {
     ...options.headers,
   };
 
-  // Only add JSON content type when we are not sending FormData
-  if (options.body && typeof options.body === "string") {
+  if (typeof options.body === "string") {
     headers["Content-Type"] = "application/json";
   }
 
-  // Add authentication token
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
-    console.log("AUTH HEADER:", headers["Authorization"]);
   }
 
   console.log("Request:", `${BASE_URL}${endpoint}`);
+  console.log("Token exists:", !!token);
+  console.log("Authorization:", headers["Authorization"]);
 
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,

@@ -30,10 +30,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await fetchAPI("/auth/login", {
         method: "POST",
-        body: JSON.stringify({
-          email,
-          password,
-        }),
+        body: JSON.stringify({ email, password }),
       });
 
       // IMPORTANT:
@@ -42,9 +39,7 @@ export const AuthProvider = ({ children }) => {
       sessionStorage.setItem("user", JSON.stringify(data.user));
 
       setUser(data.user);
-
       toast.success("Login successful!");
-
       return true;
     } catch (error) {
       toast.error(error.message);
@@ -55,21 +50,12 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     sessionStorage.removeItem("token");
     sessionStorage.removeItem("user");
-
     setUser(null);
-
     toast.success("Logged out successfully!");
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        login,
-        logout,
-        loading,
-      }}
-    >
+    <AuthContext.Provider value={{ user, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

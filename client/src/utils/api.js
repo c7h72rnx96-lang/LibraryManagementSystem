@@ -15,20 +15,12 @@ export const fetchAPI = async (endpoint, options = {}) => {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  console.log("Request:", `${BASE_URL}${endpoint}`);
-  console.log("Token exists:", !!token);
-  console.log("Authorization:", headers["Authorization"]);
-
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
     headers,
   });
 
-  console.log("Status:", response.status);
-
   const data = await response.json();
-
-  console.log("Response:", data);
 
   if (!response.ok) {
     throw new Error(data.error || data.message || "Something went wrong");

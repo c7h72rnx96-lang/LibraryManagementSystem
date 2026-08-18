@@ -16,6 +16,7 @@ app.use(
     origin: [
       "http://localhost:5173",
       "https://friendly-creponne-7f3883.netlify.app",
+      "https://librarymanagementsystem-2-qqad.onrender.com",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],

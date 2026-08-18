@@ -17,6 +17,8 @@ app.use(
       "http://localhost:5173",
       "https://friendly-creponne-7f3883.netlify.app",
       "https://librarymanagementsystem-2-qqad.onrender.com",
+      "https://aashish7.me",
+      "https://www.aashish7.me",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],

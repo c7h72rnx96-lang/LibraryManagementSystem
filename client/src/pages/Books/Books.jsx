@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { Link, useLocation } from "react-router-dom"; // <-- Added useLocation
+import { Link, useLocation } from "react-router-dom";
 import { FaSearch, FaPlus, FaEdit, FaTrash, FaBookOpen } from "react-icons/fa";
 import { AuthContext } from "../../context/AuthContext.jsx";
 
@@ -12,9 +12,8 @@ const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
 
 const Books = () => {
   const { user } = useContext(AuthContext);
-  const location = useLocation(); // <-- Allows us to read the URL
+  const location = useLocation();
 
-  // 1. Check the URL for clicked Authors or Genres
   const queryParams = new URLSearchParams(location.search);
   const urlAuthor = queryParams.get("author") || "";
   const urlGenre = queryParams.get("genre") || "";
@@ -23,7 +22,6 @@ const Books = () => {
   const [genres, setGenres] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 2. Set the initial search term if an Author was clicked
   const [searchTerm, setSearchTerm] = useState(urlAuthor);
   const [selectedGenre, setSelectedGenre] = useState("");
 
@@ -44,12 +42,10 @@ const Books = () => {
     }
   };
 
-  // 3. Keep the search box updated if the URL changes
   useEffect(() => {
     setSearchTerm(urlAuthor);
   }, [urlAuthor]);
 
-  // 4. If a Genre was clicked, wait for genres to load, find the matching ID, and select it!
   useEffect(() => {
     if (urlGenre && genres.length > 0) {
       const matchedGenre = genres.find(
@@ -87,7 +83,6 @@ const Books = () => {
           <p className="text-muted mb-0">Manage your library collection</p>
         </div>
 
-        {/* ONLY ADMIN CAN SEE ADD BOOK BUTTON */}
         {user?.role === "admin" && (
           <Link to="/books/add" className="btn btn-primary px-4">
             <FaPlus className="me-2" />
@@ -140,13 +135,18 @@ const Books = () => {
         </div>
       ) : (
         <div className="row g-4">
+          {/* We missed this map loop right here! */}
           {books.map((book) => (
             <div key={book.id} className="col-md-6 col-lg-4">
               <div className="card h-100">
                 {/* BOOK IMAGE */}
                 {book.image ? (
                   <img
-                    src={`${SERVER_URL}/uploads/${book.image}`}
+                    src={
+                      book.image.startsWith("http")
+                        ? book.image
+                        : `${SERVER_URL}/uploads/${book.image}`
+                    }
                     alt={book.title}
                     className="card-img-top"
                     style={{ height: "240px", objectFit: "cover" }}
@@ -181,7 +181,6 @@ const Books = () => {
                     </span>
                   </p>
 
-                  {/* ONLY ADMIN CAN SEE EDIT & DELETE BUTTONS */}
                   {user?.role === "admin" && (
                     <div className="mt-auto d-flex gap-2">
                       <Link

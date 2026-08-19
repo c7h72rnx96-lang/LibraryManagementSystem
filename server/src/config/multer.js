@@ -1,35 +1,21 @@
+import { v2 as cloudinary } from "cloudinary";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
 import multer from "multer";
-import path from "path";
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "src/uploads");
-  },
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
-  filename: (req, file, cb) => {
-    const uniqueName = Date.now() + "-" + Math.round(Math.random() * 1e9);
-
-    cb(null, uniqueName + path.extname(file.originalname));
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: "library_books",
+    allowed_formats: ["jpg", "png", "jpeg", "webp"],
   },
 });
 
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpg|jpeg|png|webp/;
-
-  const isValid =
-    allowedTypes.test(path.extname(file.originalname).toLowerCase()) &&
-    allowedTypes.test(file.mimetype);
-
-  if (isValid) {
-    cb(null, true);
-  } else {
-    cb(new Error("Only image files are allowed"));
-  }
-};
-
-const upload = multer({
-  storage,
-  fileFilter,
-});
+const upload = multer({ storage });
 
 export default upload;

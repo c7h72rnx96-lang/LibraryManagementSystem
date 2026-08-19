@@ -9,6 +9,8 @@
     "node": "24.x"
   },
   "dependencies": {
+    "cloudinary": "^1.41.3",
+    "multer-storage-cloudinary": "^4.0.0",
     "pg": "^8.23.0",
     "pg-hstore": "^2.3.4"
   }

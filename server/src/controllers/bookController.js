@@ -30,7 +30,8 @@ export const getBookById = async (req, res, next) => {
 
 export const createBook = async (req, res, next) => {
   try {
-    const image = req.file ? req.file.filename : null;
+    // req.file.path contains the secure Cloudinary image URL
+    const image = req.file ? req.file.path : null;
 
     const newBook = await BookService.createBook({
       ...req.body,
@@ -50,7 +51,8 @@ export const updateBook = async (req, res, next) => {
     };
 
     if (req.file) {
-      data.image = req.file.filename;
+      // req.file.path contains the secure Cloudinary image URL
+      data.image = req.file.path;
     }
 
     const updatedBook = await BookService.updateBook(req.params.id, data);

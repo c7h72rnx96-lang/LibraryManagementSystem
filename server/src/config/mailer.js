@@ -5,7 +5,7 @@ export const sendVerificationEmail = async (email, code) => {
 
   try {
     const data = await resend.emails.send({
-      from: "Library <onboarding@resend.dev>",
+      from: "Library <noreply@aashish7.me>",
       to: email, // ⚠️ FREE TIER RULE: You can ONLY send to your own email address for now!
       subject: "Library Account Verification Code",
       html: `

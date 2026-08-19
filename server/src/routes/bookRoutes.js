@@ -7,18 +7,30 @@ import {
   updateBook,
   deleteBook,
 } from "../controllers/bookController.js";
-
 import { authenticate } from "../middleware/auth.js";
+import { requireAdmin } from "../middleware/roleAuth.js"; // <-- NEW
 
 const router = Router();
 
-// PUBLIC ROUTES
+// Everyone can view books
 router.get("/", getAllBooks);
 router.get("/:id", getBookById);
 
-// PROTECTED ROUTES
-router.post("/", authenticate, upload.single("image"), createBook);
-router.put("/:id", authenticate, upload.single("image"), updateBook);
-router.delete("/:id", authenticate, deleteBook);
+// ONLY Admins can add/edit/delete books
+router.post(
+  "/",
+  authenticate,
+  requireAdmin,
+  upload.single("image"),
+  createBook,
+);
+router.put(
+  "/:id",
+  authenticate,
+  requireAdmin,
+  upload.single("image"),
+  updateBook,
+);
+router.delete("/:id", authenticate, requireAdmin, deleteBook);
 
 export default router;

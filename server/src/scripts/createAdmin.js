@@ -6,11 +6,8 @@ import User from "../models/User.js";
 const createAdmin = async () => {
   try {
     await sequelize.authenticate();
-
     const existingAdmin = await User.findOne({
-      where: {
-        email: "admin@library.com",
-      },
+      where: { email: "admin@library.com" },
     });
 
     if (existingAdmin) {
@@ -24,12 +21,11 @@ const createAdmin = async () => {
       username: "Administrator",
       email: "admin@library.com",
       password: hashedPassword,
+      role: "admin", // <-- NEW: Makes this account an Admin
+      isVerified: true,
     });
 
     console.log(" Admin account created successfully.");
-    console.log("Email: admin@library.com");
-    console.log("Password: admin123");
-
     process.exit(0);
   } catch (err) {
     console.error(err);

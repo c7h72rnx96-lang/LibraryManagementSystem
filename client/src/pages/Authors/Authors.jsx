@@ -2,10 +2,12 @@ import React, { useState, useEffect, useContext } from "react";
 import { FaSearch, FaPlus, FaEdit, FaTrash, FaUserTie } from "react-icons/fa";
 import { AuthContext } from "../../context/AuthContext.jsx";
 import { fetchAPI } from "../../utils/api.js";
+import { useNavigate } from "react-router-dom"; // Added for navigation
 import toast from "react-hot-toast";
 
 const Authors = () => {
-  const { user } = useContext(AuthContext); // Gets the logged-in user
+  const { user } = useContext(AuthContext);
+  const navigate = useNavigate(); // Initialize navigation
   const [authors, setAuthors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -26,7 +28,8 @@ const Authors = () => {
     fetchAuthors();
   }, []);
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (e, id) => {
+    e.stopPropagation(); // Stops the card click from triggering
     if (!window.confirm("Are you sure you want to delete this author?")) return;
     try {
       await fetchAPI(`/authors/${id}`, { method: "DELETE" });
@@ -35,6 +38,11 @@ const Authors = () => {
     } catch (error) {
       toast.error(error.message);
     }
+  };
+
+  const handleEdit = (e, author) => {
+    e.stopPropagation(); // Stops the card click from triggering
+    // Add your edit logic here later
   };
 
   const filteredAuthors = authors.filter((author) =>
@@ -50,7 +58,6 @@ const Authors = () => {
           <p className="text-muted mb-0">Manage library authors</p>
         </div>
 
-        {/* ONLY ADMIN CAN SEE ADD BUTTON */}
         {user?.role === "admin" && (
           <button className="btn btn-primary px-4">
             <FaPlus className="me-2" /> Add Author
@@ -85,18 +92,33 @@ const Authors = () => {
         <div className="row g-4">
           {filteredAuthors.map((author) => (
             <div key={author.id} className="col-md-4 col-lg-3">
-              <div className="card h-100 p-3 text-center">
+              {/* Added onClick and cursor styling here */}
+              <div
+                className="card h-100 p-3 text-center shadow-sm"
+                style={{ cursor: "pointer", transition: "transform 0.2s" }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.transform = "scale(1.02)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.transform = "scale(1)")
+                }
+                onClick={() =>
+                  navigate(`/books?author=${encodeURIComponent(author.name)}`)
+                }
+              >
                 <FaUserTie size={40} className="mx-auto text-secondary mb-3" />
                 <h5 className="fw-bold">{author.name}</h5>
 
-                {/* ONLY ADMIN CAN SEE EDIT/DELETE BUTTONS */}
                 {user?.role === "admin" && (
                   <div className="mt-3 d-flex gap-2 justify-content-center">
-                    <button className="btn btn-sm btn-outline-primary">
+                    <button
+                      onClick={(e) => handleEdit(e, author)}
+                      className="btn btn-sm btn-outline-primary"
+                    >
                       <FaEdit /> Edit
                     </button>
                     <button
-                      onClick={() => handleDelete(author.id)}
+                      onClick={(e) => handleDelete(e, author.id)}
                       className="btn btn-sm btn-outline-danger"
                     >
                       <FaTrash /> Delete

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom"; // <-- Added useLocation
 import { FaSearch, FaPlus, FaEdit, FaTrash, FaBookOpen } from "react-icons/fa";
 import { AuthContext } from "../../context/AuthContext.jsx";
 
@@ -11,13 +11,20 @@ const API_URL = import.meta.env.VITE_API_URL;
 const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
 
 const Books = () => {
-  const { user } = useContext(AuthContext); // <-- Gets the logged-in user
+  const { user } = useContext(AuthContext);
+  const location = useLocation(); // <-- Allows us to read the URL
+
+  // 1. Check the URL for clicked Authors or Genres
+  const queryParams = new URLSearchParams(location.search);
+  const urlAuthor = queryParams.get("author") || "";
+  const urlGenre = queryParams.get("genre") || "";
 
   const [books, setBooks] = useState([]);
   const [genres, setGenres] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [searchTerm, setSearchTerm] = useState("");
+  // 2. Set the initial search term if an Author was clicked
+  const [searchTerm, setSearchTerm] = useState(urlAuthor);
   const [selectedGenre, setSelectedGenre] = useState("");
 
   const fetchData = async () => {
@@ -36,6 +43,25 @@ const Books = () => {
       setLoading(false);
     }
   };
+
+  // 3. Keep the search box updated if the URL changes
+  useEffect(() => {
+    setSearchTerm(urlAuthor);
+  }, [urlAuthor]);
+
+  // 4. If a Genre was clicked, wait for genres to load, find the matching ID, and select it!
+  useEffect(() => {
+    if (urlGenre && genres.length > 0) {
+      const matchedGenre = genres.find(
+        (g) => g.name.toLowerCase() === urlGenre.toLowerCase(),
+      );
+      if (matchedGenre) {
+        setSelectedGenre(matchedGenre.id);
+      }
+    } else if (!urlGenre) {
+      setSelectedGenre("");
+    }
+  }, [urlGenre, genres]);
 
   useEffect(() => {
     fetchData();
@@ -82,7 +108,7 @@ const Books = () => {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="Search books..."
+                  placeholder="Search books by title or author..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />

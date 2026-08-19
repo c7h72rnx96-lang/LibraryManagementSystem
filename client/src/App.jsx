@@ -4,6 +4,7 @@ import Login from "./pages/Login/Login.jsx";
 import Register from "./pages/Register/Register.jsx";
 import DashboardLayout from "./layouts/DashboardLayout.jsx";
 import ProtectedRoute from "./components/ProtectedRoute/ProtectedRoute.jsx";
+import Cart from "./pages/Cart"; // Adjust the path if you saved it in a different folder!
 
 import Dashboard from "./pages/Dashboard/Dashboard.jsx";
 import Genres from "./pages/Genres/Genres.jsx";
@@ -28,6 +29,8 @@ function App() {
         <Route path="genres" element={<Genres />} />
         <Route path="authors" element={<Authors />} />
         <Route path="books" element={<Books />} />
+        <Route path="/cart" element={<Cart />} />
+
         <Route path="books/add" element={<AddBook />} />
         <Route path="books/edit/:id" element={<AddBook />} />
       </Route>

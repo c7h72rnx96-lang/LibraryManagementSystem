@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useContext } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { FaSearch, FaPlus, FaEdit, FaTrash, FaBookOpen } from "react-icons/fa";
+import {
+  FaSearch,
+  FaPlus,
+  FaEdit,
+  FaTrash,
+  FaBookOpen,
+  FaShoppingCart,
+} from "react-icons/fa";
 import { AuthContext } from "../../context/AuthContext.jsx";
-
+import axios from "axios";
 import BookService from "../../services/BookService.js";
 import GenreService from "../../services/GenreService.js";
 import toast from "react-hot-toast";
@@ -74,6 +81,26 @@ const Books = () => {
     }
   };
 
+  // --- NEW ADD TO CART FUNCTION ---
+  const handleAddToCart = async (bookId) => {
+    try {
+      const token = localStorage.getItem("token"); // Get token for the logged-in user
+      await axios.post(
+        `${API_URL}/cart/add`,
+        { bookId },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`, // Pass token to your verifyToken middleware
+          },
+        },
+      );
+      toast.success("Added to cart!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to add to cart. Please log in.");
+    }
+  };
+
   return (
     <div className="container-fluid">
       {/* Header */}
@@ -135,7 +162,6 @@ const Books = () => {
         </div>
       ) : (
         <div className="row g-4">
-          {/* We missed this map loop right here! */}
           {books.map((book) => (
             <div key={book.id} className="col-md-6 col-lg-4">
               <div className="card h-100">
@@ -175,28 +201,43 @@ const Books = () => {
                   <p className="mb-3">
                     <strong>Stock:</strong>
                     <span
-                      className={`badge ms-2 ${book.stock < 5 ? "bg-danger" : "bg-success"}`}
+                      className={`badge ms-2 ${book.stock < 1 ? "bg-danger" : "bg-success"}`}
                     >
                       {book.stock}
                     </span>
                   </p>
 
-                  {user?.role === "admin" && (
-                    <div className="mt-auto d-flex gap-2">
-                      <Link
-                        to={`/books/edit/${book.id}`}
-                        className="btn btn-primary flex-fill"
-                      >
-                        <FaEdit className="me-1" /> Edit
-                      </Link>
+                  <div className="mt-auto d-flex flex-column gap-2">
+                    {/* Add to Cart Button (Visible to all logged-in users) */}
+                    {user && (
                       <button
-                        onClick={() => handleDelete(book.id)}
-                        className="btn btn-danger flex-fill"
+                        onClick={() => handleAddToCart(book.id)}
+                        className="btn btn-success w-100"
+                        disabled={book.stock < 1}
                       >
-                        <FaTrash className="me-1" /> Delete
+                        <FaShoppingCart className="me-2" />
+                        {book.stock < 1 ? "Out of Stock" : "Add to Cart"}
                       </button>
-                    </div>
-                  )}
+                    )}
+
+                    {/* Admin Controls */}
+                    {user?.role === "admin" && (
+                      <div className="d-flex gap-2">
+                        <Link
+                          to={`/books/edit/${book.id}`}
+                          className="btn btn-primary flex-fill"
+                        >
+                          <FaEdit className="me-1" /> Edit
+                        </Link>
+                        <button
+                          onClick={() => handleDelete(book.id)}
+                          className="btn btn-danger flex-fill"
+                        >
+                          <FaTrash className="me-1" /> Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

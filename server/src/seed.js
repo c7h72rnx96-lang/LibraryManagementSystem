@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Book, Author, Genre, sequelize } from "./models/index.js";
+import { Book, Author, Genre } from "./models/index.js"; // <-- Removed sequelize here
 import { v2 as cloudinary } from "cloudinary";
 
 cloudinary.config({
@@ -15,16 +15,14 @@ const baseBooks = [
     genre: "Fantasy",
     description:
       "A young boy discovers he is a wizard and attends a magical school.",
-    image:
-      "https://m.media-amazon.com/images/I/81q77Q39nHL._AC_UF1000,1000_QL80_.jpg",
+    image: "https://covers.openlibrary.org/b/id/7984916-L.jpg",
   },
   {
     title: "Dune",
     author: "Frank Herbert",
     genre: "Science Fiction",
     description: "A planetary duke's son is tasked with ruling a desert world.",
-    image:
-      "https://m.media-amazon.com/images/I/81ym36dMkcL._AC_UF1000,1000_QL80_.jpg",
+    image: "https://covers.openlibrary.org/b/id/13155138-L.jpg",
   },
   {
     title: "Rich Dad Poor Dad",
@@ -32,8 +30,7 @@ const baseBooks = [
     genre: "Business & Finance",
     description:
       "What the rich teach their kids about money that the poor and middle class do not!",
-    image:
-      "https://m.media-amazon.com/images/I/81bsw6fnUiL._AC_UF1000,1000_QL80_.jpg",
+    image: "https://covers.openlibrary.org/b/id/10521270-L.jpg",
   },
   {
     title: "Atomic Habits",
@@ -41,16 +38,14 @@ const baseBooks = [
     genre: "Self-Help",
     description:
       "An easy and proven way to build good habits and break bad ones.",
-    image:
-      "https://m.media-amazon.com/images/I/81YkqyaFVEL._AC_UF1000,1000_QL80_.jpg",
+    image: "https://covers.openlibrary.org/b/id/12836261-L.jpg",
   },
   {
     title: "1984",
     author: "George Orwell",
     genre: "Dystopian Fiction",
     description: "A totalitarian regime controls every aspect of life.",
-    image:
-      "https://m.media-amazon.com/images/I/71kxa1-0mfL._AC_UF1000,1000_QL80_.jpg",
+    image: "https://covers.openlibrary.org/b/id/15321852-L.jpg",
   },
   {
     title: "The Hobbit",
@@ -58,8 +53,7 @@ const baseBooks = [
     genre: "Fantasy",
     description:
       "A reluctant hobbit leaves his peaceful home to reclaim a mountain.",
-    image:
-      "https://m.media-amazon.com/images/I/712cDO7d73L._AC_UF1000,1000_QL80_.jpg",
+    image: "https://covers.openlibrary.org/b/id/8406786-L.jpg",
   },
   {
     title: "The Great Gatsby",
@@ -67,16 +61,14 @@ const baseBooks = [
     genre: "Classic Fiction",
     description:
       "A mysterious millionaire's obsession with a beautiful former lover.",
-    image:
-      "https://m.media-amazon.com/images/I/81af+MCATTL._AC_UF1000,1000_QL80_.jpg",
+    image: "https://covers.openlibrary.org/b/id/8259468-L.jpg",
   },
   {
     title: "To Kill a Mockingbird",
     author: "Harper Lee",
     genre: "Classic Fiction",
     description: "A lawyer in the Depression-era South defends a black man.",
-    image:
-      "https://m.media-amazon.com/images/I/81gepf1eMqL._AC_UF1000,1000_QL80_.jpg",
+    image: "https://covers.openlibrary.org/b/id/11261314-L.jpg",
   },
   {
     title: "The Psychology of Money",
@@ -84,8 +76,7 @@ const baseBooks = [
     genre: "Business & Finance",
     description:
       "Timeless lessons on wealth, greed, and happiness doing well with money.",
-    image:
-      "https://m.media-amazon.com/images/I/71TRUbziHeL._AC_UF1000,1000_QL80_.jpg",
+    image: "https://covers.openlibrary.org/b/id/10702678-L.jpg",
   },
   {
     title: "Project Hail Mary",
@@ -93,22 +84,20 @@ const baseBooks = [
     genre: "Science Fiction",
     description:
       "A lone astronaut must save the earth from disaster in this sci-fi thriller.",
-    image:
-      "https://m.media-amazon.com/images/I/81577H8eooL._AC_UF1000,1000_QL80_.jpg",
+    image: "https://covers.openlibrary.org/b/id/12644265-L.jpg",
   },
 ];
 
 const runSeed = async () => {
   try {
-    console.log("🌱 Connecting to Neon database...");
-    await sequelize.authenticate();
-
     console.log(
       "☁️ Uploading 10 base images to Cloudinary (this takes about 15 seconds)...",
     );
 
     // 1. Upload images once and store the secure URLs in a dictionary
     const uploadedImages = {};
+    // ... the rest of the file stays exactly the same ...
+
     for (const item of baseBooks) {
       const uploadResponse = await cloudinary.uploader.upload(item.image, {
         folder: "library_books",

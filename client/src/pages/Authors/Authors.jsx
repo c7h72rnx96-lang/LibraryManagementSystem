@@ -1,23 +1,22 @@
-import React, { useState, useEffect } from "react";
-import AuthorService from "../../services/AuthorService.js";
+import React, { useState, useEffect, useContext } from "react";
+import { FaSearch, FaPlus, FaEdit, FaTrash, FaUserTie } from "react-icons/fa";
+import { AuthContext } from "../../context/AuthContext.jsx";
+import { fetchAPI } from "../../utils/api.js";
 import toast from "react-hot-toast";
 
 const Authors = () => {
+  const { user } = useContext(AuthContext); // Gets the logged-in user
   const [authors, setAuthors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState(null);
-
-  const [formData, setFormData] = useState({
-    name: "",
-    biography: "",
-  });
+  const [searchTerm, setSearchTerm] = useState("");
 
   const fetchAuthors = async () => {
+    setLoading(true);
     try {
-      const data = await AuthorService.getAll();
+      const data = await fetchAPI("/authors");
       setAuthors(data);
     } catch (error) {
-      toast.error("Failed to fetch authors");
+      toast.error("Failed to load authors");
     } finally {
       setLoading(false);
     }
@@ -27,188 +26,94 @@ const Authors = () => {
     fetchAuthors();
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    try {
-      if (editingId) {
-        await AuthorService.update(editingId, formData);
-        toast.success("Author updated successfully!");
-      } else {
-        await AuthorService.create(formData);
-        toast.success("Author added successfully!");
-      }
-
-      setFormData({
-        name: "",
-        biography: "",
-      });
-
-      setEditingId(null);
-      fetchAuthors();
-    } catch (error) {
-      toast.error(error.message);
-    }
-  };
-
-  const handleEdit = (author) => {
-    setEditingId(author.id);
-
-    setFormData({
-      name: author.name,
-      biography: author.biography || "",
-    });
-  };
-
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this author?")) return;
-
+    if (!window.confirm("Are you sure you want to delete this author?")) return;
     try {
-      await AuthorService.delete(id);
-      toast.success("Author deleted successfully!");
+      await fetchAPI(`/authors/${id}`, { method: "DELETE" });
+      toast.success("Author deleted successfully");
       fetchAuthors();
     } catch (error) {
       toast.error(error.message);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="text-center mt-5">
-        <div className="spinner-border text-primary"></div>
-      </div>
-    );
-  }
+  const filteredAuthors = authors.filter((author) =>
+    author.name?.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
 
   return (
-    <div className="row">
-      <div className="col-lg-8 mb-4">
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <div>
-            <h2 className="fw-bold">Authors</h2>
-            <p className="text-muted mb-0">Manage all authors</p>
-          </div>
+    <div className="container-fluid">
+      {/* Header */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 className="fw-bold">Authors</h2>
+          <p className="text-muted mb-0">Manage library authors</p>
         </div>
 
-        <div className="card">
-          <div className="card-body p-0">
-            <table className="table table-hover mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th>ID</th>
-                  <th>Name</th>
-                  <th>Biography</th>
-                  <th className="text-end">Actions</th>
-                </tr>
-              </thead>
+        {/* ONLY ADMIN CAN SEE ADD BUTTON */}
+        {user?.role === "admin" && (
+          <button className="btn btn-primary px-4">
+            <FaPlus className="me-2" /> Add Author
+          </button>
+        )}
+      </div>
 
-              <tbody>
-                {authors.map((author) => (
-                  <tr key={author.id}>
-                    <td>{author.id}</td>
+      {/* Search Box */}
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="input-group" style={{ maxWidth: "400px" }}>
+            <span className="input-group-text bg-white">
+              <FaSearch />
+            </span>
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Search authors..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
 
-                    <td className="fw-semibold">{author.name}</td>
+      {/* Data List */}
+      {loading ? (
+        <div className="text-center mt-5">
+          <div className="spinner-border text-primary"></div>
+        </div>
+      ) : (
+        <div className="row g-4">
+          {filteredAuthors.map((author) => (
+            <div key={author.id} className="col-md-4 col-lg-3">
+              <div className="card h-100 p-3 text-center">
+                <FaUserTie size={40} className="mx-auto text-secondary mb-3" />
+                <h5 className="fw-bold">{author.name}</h5>
 
-                    <td style={{ maxWidth: "250px" }}>
-                      {author.biography || "-"}
-                    </td>
-
-                    <td className="text-end">
-                      <button
-                        className="btn btn-sm btn-primary me-2"
-                        onClick={() => handleEdit(author)}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        className="btn btn-sm btn-danger"
-                        onClick={() => handleDelete(author.id)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-
-                {authors.length === 0 && (
-                  <tr>
-                    <td colSpan="4" className="text-center py-4">
-                      No authors found.
-                    </td>
-                  </tr>
+                {/* ONLY ADMIN CAN SEE EDIT/DELETE BUTTONS */}
+                {user?.role === "admin" && (
+                  <div className="mt-3 d-flex gap-2 justify-content-center">
+                    <button className="btn btn-sm btn-outline-primary">
+                      <FaEdit /> Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(author.id)}
+                      className="btn btn-sm btn-outline-danger"
+                    >
+                      <FaTrash /> Delete
+                    </button>
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div className="col-lg-4">
-        <div className="card">
-          <div className="card-body">
-            <h4 className="fw-bold mb-4">
-              {editingId ? "Edit Author" : "Add Author"}
-            </h4>
-
-            <form onSubmit={handleSubmit}>
-              <div className="mb-3">
-                <label className="form-label">Author Name</label>
-
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      name: e.target.value,
-                    })
-                  }
-                  required
-                />
               </div>
+            </div>
+          ))}
 
-              <div className="mb-3">
-                <label className="form-label">Biography</label>
-
-                <textarea
-                  rows="4"
-                  className="form-control"
-                  value={formData.biography}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      biography: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <button className="btn btn-primary w-100" type="submit">
-                {editingId ? "Update Author" : "Save Author"}
-              </button>
-
-              {editingId && (
-                <button
-                  type="button"
-                  className="btn btn-light w-100 mt-2"
-                  onClick={() => {
-                    setEditingId(null);
-
-                    setFormData({
-                      name: "",
-                      biography: "",
-                    });
-                  }}
-                >
-                  Cancel
-                </button>
-              )}
-            </form>
-          </div>
+          {filteredAuthors.length === 0 && (
+            <div className="col-12 text-center py-5">
+              <p className="text-muted fs-5">No authors found.</p>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 };

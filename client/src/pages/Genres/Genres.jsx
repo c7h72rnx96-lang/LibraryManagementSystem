@@ -1,22 +1,22 @@
-import React, { useState, useEffect } from "react";
-import GenreService from "../../services/GenreService.js";
+import React, { useState, useEffect, useContext } from "react";
+import { FaSearch, FaPlus, FaEdit, FaTrash, FaTags } from "react-icons/fa";
+import { AuthContext } from "../../context/AuthContext.jsx";
+import { fetchAPI } from "../../utils/api.js";
 import toast from "react-hot-toast";
 
 const Genres = () => {
+  const { user } = useContext(AuthContext); // Gets the logged-in user
   const [genres, setGenres] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState(null);
-
-  const [formData, setFormData] = useState({
-    name: "",
-  });
+  const [searchTerm, setSearchTerm] = useState("");
 
   const fetchGenres = async () => {
+    setLoading(true);
     try {
-      const data = await GenreService.getAll();
+      const data = await fetchAPI("/genres");
       setGenres(data);
     } catch (error) {
-      toast.error("Failed to fetch genres");
+      toast.error("Failed to load genres");
     } finally {
       setLoading(false);
     }
@@ -26,152 +26,94 @@ const Genres = () => {
     fetchGenres();
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    try {
-      if (editingId) {
-        await GenreService.update(editingId, formData);
-        toast.success("Genre updated successfully!");
-      } else {
-        await GenreService.create(formData);
-        toast.success("Genre added successfully!");
-      }
-
-      setFormData({ name: "" });
-      setEditingId(null);
-      fetchGenres();
-    } catch (error) {
-      toast.error(error.message);
-    }
-  };
-
-  const handleEdit = (genre) => {
-    setEditingId(genre.id);
-    setFormData({ name: genre.name });
-  };
-
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this genre?")) return;
-
+    if (!window.confirm("Are you sure you want to delete this genre?")) return;
     try {
-      await GenreService.delete(id);
-      toast.success("Genre deleted successfully!");
+      await fetchAPI(`/genres/${id}`, { method: "DELETE" });
+      toast.success("Genre deleted successfully");
       fetchGenres();
     } catch (error) {
       toast.error(error.message);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="text-center mt-5">
-        <div className="spinner-border text-primary"></div>
-      </div>
-    );
-  }
+  const filteredGenres = genres.filter((genre) =>
+    genre.name?.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
 
   return (
-    <div className="row">
-      <div className="col-lg-8 mb-4">
-        <div className="mb-3">
+    <div className="container-fluid">
+      {/* Header */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
           <h2 className="fw-bold">Genres</h2>
-          <p className="text-muted mb-0">Manage all book genres</p>
+          <p className="text-muted mb-0">Manage library genres</p>
         </div>
 
-        <div className="card">
-          <div className="card-body p-0">
-            <table className="table table-hover mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th>ID</th>
-                  <th>Genre Name</th>
-                  <th className="text-end">Actions</th>
-                </tr>
-              </thead>
+        {/* ONLY ADMIN CAN SEE ADD BUTTON */}
+        {user?.role === "admin" && (
+          <button className="btn btn-primary px-4">
+            <FaPlus className="me-2" /> Add Genre
+          </button>
+        )}
+      </div>
 
-              <tbody>
-                {genres.map((genre) => (
-                  <tr key={genre.id}>
-                    <td>{genre.id}</td>
+      {/* Search Box */}
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="input-group" style={{ maxWidth: "400px" }}>
+            <span className="input-group-text bg-white">
+              <FaSearch />
+            </span>
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Search genres..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
 
-                    <td className="fw-semibold">{genre.name}</td>
+      {/* Data List */}
+      {loading ? (
+        <div className="text-center mt-5">
+          <div className="spinner-border text-primary"></div>
+        </div>
+      ) : (
+        <div className="row g-4">
+          {filteredGenres.map((genre) => (
+            <div key={genre.id} className="col-md-4 col-lg-3">
+              <div className="card h-100 p-3 text-center">
+                <FaTags size={40} className="mx-auto text-secondary mb-3" />
+                <h5 className="fw-bold">{genre.name}</h5>
 
-                    <td className="text-end">
-                      <button
-                        className="btn btn-sm btn-primary me-2"
-                        onClick={() => handleEdit(genre)}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        className="btn btn-sm btn-danger"
-                        onClick={() => handleDelete(genre.id)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-
-                {genres.length === 0 && (
-                  <tr>
-                    <td colSpan="3" className="text-center py-4">
-                      No genres found.
-                    </td>
-                  </tr>
+                {/* ONLY ADMIN CAN SEE EDIT/DELETE BUTTONS */}
+                {user?.role === "admin" && (
+                  <div className="mt-3 d-flex gap-2 justify-content-center">
+                    <button className="btn btn-sm btn-outline-primary">
+                      <FaEdit /> Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(genre.id)}
+                      className="btn btn-sm btn-outline-danger"
+                    >
+                      <FaTrash /> Delete
+                    </button>
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div className="col-lg-4">
-        <div className="card">
-          <div className="card-body">
-            <h4 className="fw-bold mb-4">
-              {editingId ? "Edit Genre" : "Add Genre"}
-            </h4>
-
-            <form onSubmit={handleSubmit}>
-              <div className="mb-3">
-                <label className="form-label">Genre Name</label>
-
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({
-                      name: e.target.value,
-                    })
-                  }
-                  required
-                />
               </div>
+            </div>
+          ))}
 
-              <button type="submit" className="btn btn-primary w-100">
-                {editingId ? "Update Genre" : "Save Genre"}
-              </button>
-
-              {editingId && (
-                <button
-                  type="button"
-                  className="btn btn-light w-100 mt-2"
-                  onClick={() => {
-                    setEditingId(null);
-                    setFormData({ name: "" });
-                  }}
-                >
-                  Cancel
-                </button>
-              )}
-            </form>
-          </div>
+          {filteredGenres.length === 0 && (
+            <div className="col-12 text-center py-5">
+              <p className="text-muted fs-5">No genres found.</p>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { FaShoppingCart, FaBookOpen } from "react-icons/fa";
+import { FaShoppingCart, FaBookOpen, FaTrash } from "react-icons/fa"; // <-- Added FaTrash
 import toast from "react-hot-toast";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -16,11 +16,10 @@ const Cart = () => {
 
   const fetchCart = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = sessionStorage.getItem("token");
       const response = await axios.get(`${API_URL}/cart`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Set the items, or an empty array if the cart is empty
       setCartItems(response.data.CartItems || []);
     } catch (error) {
       console.error(error);
@@ -30,9 +29,23 @@ const Cart = () => {
     }
   };
 
+  // --- NEW: Function to delete the item ---
+  const handleRemove = async (itemId) => {
+    try {
+      const token = sessionStorage.getItem("token");
+      await axios.delete(`${API_URL}/cart/${itemId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success("Removed from cart");
+      fetchCart(); // Instantly reloads the cart to show it's gone!
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to remove item");
+    }
+  };
+
   const handleCheckout = () => {
     toast.success("Checkout successful! Books are ready to be borrowed.");
-    // We will wire up the actual backend checkout logic next!
   };
 
   if (loading) {
@@ -57,10 +70,21 @@ const Cart = () => {
         </div>
       ) : (
         <div className="row mt-4">
-          {/* Cart Items List */}
           <div className="col-md-8">
             {cartItems.map((item) => (
-              <div key={item.id} className="card mb-3 shadow-sm">
+              <div
+                key={item.id}
+                className="card mb-3 shadow-sm position-relative"
+              >
+                {/* --- NEW: The Red Trash Can Button --- */}
+                <button
+                  onClick={() => handleRemove(item.id)}
+                  className="btn btn-sm btn-outline-danger position-absolute top-0 end-0 m-2"
+                  title="Remove from cart"
+                >
+                  <FaTrash />
+                </button>
+
                 <div className="row g-0">
                   <div className="col-md-2">
                     <img
@@ -80,7 +104,9 @@ const Cart = () => {
                   </div>
                   <div className="col-md-10 d-flex align-items-center">
                     <div className="card-body">
-                      <h5 className="card-title fw-bold">{item.Book.title}</h5>
+                      <h5 className="card-title fw-bold pe-4">
+                        {item.Book.title}
+                      </h5>
                       <p className="card-text mb-0 text-muted">
                         Quantity to borrow: <strong>{item.quantity}</strong>
                       </p>

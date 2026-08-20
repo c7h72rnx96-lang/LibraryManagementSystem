@@ -62,3 +62,20 @@ export const addToCart = async (req, res) => {
     res.status(500).json({ message: "Server error adding to cart" });
   }
 };
+
+// 3. Remove an item from the cart
+export const removeFromCart = async (req, res) => {
+  try {
+    const { itemId } = req.params; // We get the specific cart item ID from the URL
+
+    const cartItem = await CartItem.findByPk(itemId);
+    if (cartItem) {
+      await cartItem.destroy(); // Deletes it from the database entirely
+    }
+
+    res.status(200).json({ message: "Item removed successfully!" });
+  } catch (error) {
+    console.error("Remove from Cart Error:", error);
+    res.status(500).json({ message: "Server error removing item" });
+  }
+};

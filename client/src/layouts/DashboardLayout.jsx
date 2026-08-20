@@ -10,6 +10,7 @@ import {
   FaBell,
   FaUserCircle,
   FaSignOutAlt,
+  FaShoppingCart,
 } from "react-icons/fa";
 
 const DashboardLayout = () => {
@@ -71,6 +72,14 @@ const DashboardLayout = () => {
                 className={`nav-link rounded px-3 py-2 ${location.pathname.includes("/genres") ? "bg-primary text-white" : "text-dark"}`}
               >
                 <FaTags className="me-2" /> Genres
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link
+                to="/cart"
+                className={`nav-link rounded px-3 py-2 ${location.pathname.includes("/cart") ? "bg-primary text-white" : "text-dark"}`}
+              >
+                <FaShoppingCart className="me-2" /> My Cart
               </Link>
             </li>
           </ul>

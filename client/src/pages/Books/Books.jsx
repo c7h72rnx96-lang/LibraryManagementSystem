@@ -82,15 +82,16 @@ const Books = () => {
   };
 
   // --- NEW ADD TO CART FUNCTION ---
+  // --- NEW ADD TO CART FUNCTION ---
   const handleAddToCart = async (bookId) => {
     try {
-      const token = localStorage.getItem("token"); // Get token for the logged-in user
+      const token = sessionStorage.getItem("token"); // <-- CHANGED TO sessionStorage
       await axios.post(
         `${API_URL}/cart/add`,
         { bookId },
         {
           headers: {
-            Authorization: `Bearer ${token}`, // Pass token to your verifyToken middleware
+            Authorization: `Bearer ${token}`,
           },
         },
       );

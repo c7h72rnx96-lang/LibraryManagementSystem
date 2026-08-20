@@ -1,11 +1,7 @@
-import app from "./app.js";
-import { config } from "./config/index.js";
-import { sequelize } from "./config/database.js";
-
 const startServer = async () => {
   try {
     await sequelize.authenticate();
-    await sequelize.sync();
+    await sequelize.sync({ alter: true }); // <-- ADD { alter: true } HERE
 
     console.log("✅ Database Connected");
 
@@ -16,5 +12,3 @@ const startServer = async () => {
     console.error(err);
   }
 };
-
-startServer();

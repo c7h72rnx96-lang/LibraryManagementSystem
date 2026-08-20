@@ -4,7 +4,8 @@ import Genre from "./Genre.js";
 import Book from "./Book.js";
 import Cart from "./Cart.js"; // <-- NEW
 import CartItem from "./CartItem.js"; // <-- NEW
-
+import Order from "./Order.js";
+import OrderItem from "./OrderItem.js";
 // --- ORIGINAL RELATIONSHIPS ---
 Author.hasMany(Book, {
   foreignKey: "authorId",
@@ -48,5 +49,15 @@ CartItem.belongsTo(Book, {
   foreignKey: "bookId",
 });
 
+// --- ORDER RELATIONSHIPS ---
+User.hasMany(Order, { foreignKey: "userId" });
+Order.belongsTo(User, { foreignKey: "userId" });
+
+Order.hasMany(OrderItem, { foreignKey: "orderId", onDelete: "CASCADE" });
+OrderItem.belongsTo(Order, { foreignKey: "orderId" });
+
+Book.hasMany(OrderItem, { foreignKey: "bookId" });
+OrderItem.belongsTo(Book, { foreignKey: "bookId" });
+
 // Make sure to export the new models!
-export { User, Author, Genre, Book, Cart, CartItem };
+export { User, Author, Genre, Book, Cart, CartItem, Order, OrderItem };

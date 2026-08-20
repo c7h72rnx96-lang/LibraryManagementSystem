@@ -81,11 +81,9 @@ const Books = () => {
     }
   };
 
-  // --- NEW ADD TO CART FUNCTION ---
-  // --- NEW ADD TO CART FUNCTION ---
   const handleAddToCart = async (bookId) => {
     try {
-      const token = sessionStorage.getItem("token"); // <-- CHANGED TO sessionStorage
+      const token = sessionStorage.getItem("token");
       await axios.post(
         `${API_URL}/cart/add`,
         { bookId },
@@ -193,12 +191,38 @@ const Books = () => {
                 {/* Book Details */}
                 <div className="card-body d-flex flex-column">
                   <h5 className="fw-bold">{book.title}</h5>
-                  <p className="mb-2">
+                  <p className="mb-1 text-muted small">
                     <strong>Author:</strong> {book.Author?.name}
                   </p>
-                  <p className="mb-2">
+                  <p className="mb-2 text-muted small">
                     <strong>Genre:</strong> {book.Genre?.name}
                   </p>
+
+                  {/* PRICE & DISCOUNT SECTION */}
+                  <div className="mb-3">
+                    {book.discountPercentage > 0 ? (
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="fw-bold text-success fs-5">
+                          Rs.{" "}
+                          {(
+                            book.price *
+                            (1 - book.discountPercentage / 100)
+                          ).toFixed(2)}
+                        </span>
+                        <span className="text-decoration-line-through text-muted small">
+                          Rs. {Number(book.price).toFixed(2)}
+                        </span>
+                        <span className="badge bg-danger">
+                          -{book.discountPercentage}%
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="fw-bold fs-5">
+                        Rs. {Number(book.price).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+
                   <p className="mb-3">
                     <strong>Stock:</strong>
                     <span
@@ -209,7 +233,6 @@ const Books = () => {
                   </p>
 
                   <div className="mt-auto d-flex flex-column gap-2">
-                    {/* Add to Cart Button (Visible to all logged-in users) */}
                     {user && (
                       <button
                         onClick={() => handleAddToCart(book.id)}
@@ -221,7 +244,6 @@ const Books = () => {
                       </button>
                     )}
 
-                    {/* Admin Controls */}
                     {user?.role === "admin" && (
                       <div className="d-flex gap-2">
                         <Link
@@ -244,7 +266,6 @@ const Books = () => {
             </div>
           ))}
 
-          {/* No books */}
           {books.length === 0 && (
             <div className="col-12 text-center py-5">
               <FaBookOpen size={60} className="text-secondary mb-3" />

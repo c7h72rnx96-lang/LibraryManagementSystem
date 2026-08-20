@@ -7,6 +7,7 @@ import genreRoutes from "./routes/genreRoutes.js";
 import authorRoutes from "./routes/authorRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js"; // <-- ADD THIS IMPORT
+import orderRoutes from "./routes/orderRoutes.js";
 
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 
@@ -41,6 +42,7 @@ app.use("/api/genres", genreRoutes);
 app.use("/api/authors", authorRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/cart", cartRoutes); // <-- ADD THIS ROUTE
+app.use("/api/orders", orderRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

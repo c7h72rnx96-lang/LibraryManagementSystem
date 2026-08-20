@@ -17,6 +17,8 @@ const AddBook = () => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [stock, setStock] = useState(0);
+  const [price, setPrice] = useState(0);
+  const [discountPercentage, setDiscountPercentage] = useState(0);
   const [authorId, setAuthorId] = useState("");
   const [genreId, setGenreId] = useState("");
   const [image, setImage] = useState(null);
@@ -34,10 +36,11 @@ const AddBook = () => {
 
         if (isEditMode) {
           const book = await BookService.getById(id);
-
           setTitle(book.title);
           setDescription(book.description || "");
           setStock(book.stock);
+          setPrice(book.price || 0);
+          setDiscountPercentage(book.discountPercentage || 0);
           setAuthorId(book.authorId);
           setGenreId(book.genreId);
         }
@@ -51,14 +54,14 @@ const AddBook = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     setLoading(true);
 
     const formData = new FormData();
-
     formData.append("title", title);
     formData.append("description", description);
     formData.append("stock", stock);
+    formData.append("price", price);
+    formData.append("discountPercentage", discountPercentage);
     formData.append("authorId", authorId);
     formData.append("genreId", genreId);
 
@@ -95,7 +98,6 @@ const AddBook = () => {
             <form onSubmit={handleSubmit}>
               <div className="mb-3">
                 <label className="form-label">Book Title</label>
-
                 <input
                   type="text"
                   className="form-control"
@@ -108,7 +110,6 @@ const AddBook = () => {
               <div className="row">
                 <div className="col-md-6 mb-3">
                   <label className="form-label">Author</label>
-
                   <select
                     className="form-select"
                     value={authorId}
@@ -116,7 +117,6 @@ const AddBook = () => {
                     required
                   >
                     <option value="">Select Author</option>
-
                     {authors.map((author) => (
                       <option key={author.id} value={author.id}>
                         {author.name}
@@ -127,7 +127,6 @@ const AddBook = () => {
 
                 <div className="col-md-6 mb-3">
                   <label className="form-label">Genre</label>
-
                   <select
                     className="form-select"
                     value={genreId}
@@ -135,7 +134,6 @@ const AddBook = () => {
                     required
                   >
                     <option value="">Select Genre</option>
-
                     {genres.map((genre) => (
                       <option key={genre.id} value={genre.id}>
                         {genre.name}
@@ -146,9 +144,8 @@ const AddBook = () => {
               </div>
 
               <div className="row">
-                <div className="col-md-6 mb-3">
+                <div className="col-md-4 mb-3">
                   <label className="form-label">Stock</label>
-
                   <input
                     type="number"
                     min="0"
@@ -159,21 +156,45 @@ const AddBook = () => {
                   />
                 </div>
 
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">Cover Image</label>
-
+                <div className="col-md-4 mb-3">
+                  <label className="form-label">Price (Rs.)</label>
                   <input
-                    type="file"
+                    type="number"
+                    step="0.01"
+                    min="0"
                     className="form-control"
-                    accept="image/*"
-                    onChange={(e) => setImage(e.target.files[0])}
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="col-md-4 mb-3">
+                  <label className="form-label">Discount %</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    className="form-control"
+                    value={discountPercentage}
+                    onChange={(e) => setDiscountPercentage(e.target.value)}
+                    required
                   />
                 </div>
               </div>
 
+              <div className="mb-3">
+                <label className="form-label">Cover Image</label>
+                <input
+                  type="file"
+                  className="form-control"
+                  accept="image/*"
+                  onChange={(e) => setImage(e.target.files[0])}
+                />
+              </div>
+
               <div className="mb-4">
                 <label className="form-label">Description</label>
-
                 <textarea
                   rows="4"
                   className="form-control"

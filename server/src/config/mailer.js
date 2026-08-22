@@ -23,3 +23,28 @@ export const sendVerificationEmail = async (email, code) => {
     throw new Error("Could not send verification email.");
   }
 };
+// ==========================================
+// SEND PASSWORD RESET EMAIL
+// ==========================================
+export const sendPasswordResetEmail = async (email, code) => {
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  try {
+    const data = await resend.emails.send({
+      from: "Library <noreply@aashish7.me>",
+      to: email,
+      subject: "Library Password Reset Code",
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2>Password Reset Request</h2>
+          <p>We received a request to reset your password. Your 6-digit code is:</p>
+          <h1 style="color: #dc2626; letter-spacing: 5px;">${code}</h1>
+          <p>This code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
+        </div>
+      `,
+    });
+    console.log("Reset email sent:", data);
+  } catch (error) {
+    console.error("Failed to send reset email:", error);
+    throw new Error("Could not send reset email.");
+  }
+};

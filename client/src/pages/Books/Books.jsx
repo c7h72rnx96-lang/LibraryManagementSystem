@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   FaSearch,
   FaPlus,
@@ -20,6 +20,7 @@ const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
 const Books = () => {
   const { user } = useContext(AuthContext);
   const location = useLocation();
+  const navigate = useNavigate(); // For redirecting to the details page!
 
   const queryParams = new URLSearchParams(location.search);
   const urlAuthor = queryParams.get("author") || "";
@@ -163,8 +164,8 @@ const Books = () => {
         <div className="row g-4">
           {books.map((book) => (
             <div key={book.id} className="col-md-6 col-lg-4">
-              <div className="card h-100">
-                {/* BOOK IMAGE */}
+              <div className="card h-100 shadow-sm border-0">
+                {/* BOOK IMAGE (Now Clickable!) */}
                 {book.image ? (
                   <img
                     src={
@@ -174,15 +175,23 @@ const Books = () => {
                     }
                     alt={book.title}
                     className="card-img-top"
-                    style={{ height: "240px", objectFit: "cover" }}
+                    style={{
+                      height: "240px",
+                      objectFit: "cover",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => navigate(`/books/${book.id}`)}
                     onError={(e) => {
-                      e.currentTarget.style.display = "none";
+                      e.currentTarget.onerror = null; // Prevents infinite loops
+                      e.currentTarget.src =
+                        "https://placehold.co/400x600/1e293b/ffffff?text=No+Cover";
                     }}
                   />
                 ) : (
                   <div
                     className="d-flex justify-content-center align-items-center bg-light"
-                    style={{ height: "240px" }}
+                    style={{ height: "240px", cursor: "pointer" }}
+                    onClick={() => navigate(`/books/${book.id}`)}
                   >
                     <FaBookOpen size={50} color="#999" />
                   </div>
@@ -190,12 +199,16 @@ const Books = () => {
 
                 {/* Book Details */}
                 <div className="card-body d-flex flex-column">
-                  <h5 className="fw-bold">{book.title}</h5>
+                  {/* TITLE (Now Clickable!) */}
+                  <h5
+                    className="fw-bold text-primary"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => navigate(`/books/${book.id}`)}
+                  >
+                    {book.title}
+                  </h5>
                   <p className="mb-1 text-muted small">
                     <strong>Author:</strong> {book.Author?.name}
-                  </p>
-                  <p className="mb-2 text-muted small">
-                    <strong>Genre:</strong> {book.Genre?.name}
                   </p>
 
                   {/* PRICE & DISCOUNT SECTION */}

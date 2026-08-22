@@ -8,10 +8,16 @@ const User = sequelize.define(
     username: { type: DataTypes.STRING, allowNull: false },
     email: { type: DataTypes.STRING, allowNull: false, unique: true },
     password: { type: DataTypes.STRING, allowNull: false },
-    role: { type: DataTypes.STRING, defaultValue: "customer" }, // <-- NEW: Defaults to customer
+    role: { type: DataTypes.STRING, defaultValue: "customer" },
     isVerified: { type: DataTypes.BOOLEAN, defaultValue: false },
     verificationCode: { type: DataTypes.STRING, allowNull: true },
     codeExpiresAt: { type: DataTypes.DATE, allowNull: true },
+
+    // ---> NEW PROFILE FIELDS <---
+    phone: { type: DataTypes.STRING, allowNull: true },
+    avatar: { type: DataTypes.STRING, allowNull: true },
+    address: { type: DataTypes.STRING, allowNull: true },
+    city: { type: DataTypes.STRING, allowNull: true },
   },
   {
     tableName: "users",

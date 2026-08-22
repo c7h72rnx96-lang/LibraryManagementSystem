@@ -2,52 +2,28 @@ import User from "./User.js";
 import Author from "./Author.js";
 import Genre from "./Genre.js";
 import Book from "./Book.js";
-import Cart from "./Cart.js"; // <-- NEW
-import CartItem from "./CartItem.js"; // <-- NEW
+import Cart from "./Cart.js";
+import CartItem from "./CartItem.js";
 import Order from "./Order.js";
 import OrderItem from "./OrderItem.js";
-// --- ORIGINAL RELATIONSHIPS ---
-Author.hasMany(Book, {
-  foreignKey: "authorId",
-});
+import Review from "./Review.js"; // <-- NEW IMPORT
 
-Book.belongsTo(Author, {
-  foreignKey: "authorId",
-});
+// --- BOOK RELATIONSHIPS ---
+Author.hasMany(Book, { foreignKey: "authorId" });
+Book.belongsTo(Author, { foreignKey: "authorId" });
 
-Genre.hasMany(Book, {
-  foreignKey: "genreId",
-});
+Genre.hasMany(Book, { foreignKey: "genreId" });
+Book.belongsTo(Genre, { foreignKey: "genreId" });
 
-Book.belongsTo(Genre, {
-  foreignKey: "genreId",
-});
+// --- CART RELATIONSHIPS ---
+User.hasOne(Cart, { foreignKey: "userId" });
+Cart.belongsTo(User, { foreignKey: "userId" });
 
-// --- NEW CART RELATIONSHIPS ---
+Cart.hasMany(CartItem, { foreignKey: "cartId" });
+CartItem.belongsTo(Cart, { foreignKey: "cartId" });
 
-// 1. A User has one Cart
-User.hasOne(Cart, {
-  foreignKey: "userId",
-});
-Cart.belongsTo(User, {
-  foreignKey: "userId",
-});
-
-// 2. A Cart contains many CartItems
-Cart.hasMany(CartItem, {
-  foreignKey: "cartId",
-});
-CartItem.belongsTo(Cart, {
-  foreignKey: "cartId",
-});
-
-// 3. A CartItem links to one specific Book
-Book.hasMany(CartItem, {
-  foreignKey: "bookId",
-});
-CartItem.belongsTo(Book, {
-  foreignKey: "bookId",
-});
+Book.hasMany(CartItem, { foreignKey: "bookId" });
+CartItem.belongsTo(Book, { foreignKey: "bookId" });
 
 // --- ORDER RELATIONSHIPS ---
 User.hasMany(Order, { foreignKey: "userId" });
@@ -59,5 +35,11 @@ OrderItem.belongsTo(Order, { foreignKey: "orderId" });
 Book.hasMany(OrderItem, { foreignKey: "bookId" });
 OrderItem.belongsTo(Book, { foreignKey: "bookId" });
 
-// Make sure to export the new models!
-export { User, Author, Genre, Book, Cart, CartItem, Order, OrderItem };
+// --- NEW: REVIEW RELATIONSHIPS ---
+User.hasMany(Review, { foreignKey: "userId" });
+Review.belongsTo(User, { foreignKey: "userId" });
+
+Book.hasMany(Review, { foreignKey: "bookId" });
+Review.belongsTo(Book, { foreignKey: "bookId" });
+
+export { User, Author, Genre, Book, Cart, CartItem, Order, OrderItem, Review }; // <-- EXPORTED REVIEW

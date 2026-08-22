@@ -79,3 +79,21 @@ export const removeFromCart = async (req, res) => {
     res.status(500).json({ message: "Server error removing item" });
   }
 };
+// 4. Update an item's quantity
+export const updateCartItemQuantity = async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { quantity } = req.body;
+
+    const cartItem = await CartItem.findByPk(itemId);
+    if (!cartItem) return res.status(404).json({ message: "Item not found" });
+
+    cartItem.quantity = quantity;
+    await cartItem.save();
+
+    res.status(200).json({ message: "Quantity updated successfully" });
+  } catch (error) {
+    console.error("Update Quantity Error:", error);
+    res.status(500).json({ message: "Server error updating quantity" });
+  }
+};

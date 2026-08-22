@@ -1,6 +1,8 @@
 import Book from "../models/Book.js";
 import Author from "../models/Author.js";
 import Genre from "../models/Genre.js";
+import Review from "../models/Review.js"; // <-- NEW
+import User from "../models/User.js"; // <-- NEW
 import { Op } from "sequelize";
 
 export const BookService = {
@@ -23,9 +25,18 @@ export const BookService = {
     });
   },
 
+  // UPGRADED: Now fetches Reviews and the User who wrote them!
   getBookById: async (id) => {
     return await Book.findByPk(id, {
-      include: [Author, Genre],
+      include: [
+        Author,
+        Genre,
+        {
+          model: Review,
+          include: [{ model: User, attributes: ["username", "avatar"] }],
+          order: [["createdAt", "DESC"]], // Newest reviews first
+        },
+      ],
     });
   },
 

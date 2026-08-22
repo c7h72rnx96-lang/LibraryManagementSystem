@@ -1,5 +1,5 @@
 import { BookService } from "../services/bookService.js";
-
+import { Review } from "../models/index.js";
 export const getAllBooks = async (req, res, next) => {
   try {
     const { search, genreId } = req.query;
@@ -84,5 +84,29 @@ export const deleteBook = async (req, res, next) => {
     });
   } catch (err) {
     next(err);
+  }
+};
+// ==========================================
+// ADD BOOK REVIEW
+// ==========================================
+export const addReview = async (req, res, next) => {
+  try {
+    const { rating, comment } = req.body;
+    const bookId = req.params.id;
+    const userId = req.user.id; // Comes securely from the token
+
+    // Check if this user already reviewed this book
+    const existingReview = await Review.findOne({ where: { userId, bookId } });
+    if (existingReview) {
+      return res
+        .status(400)
+        .json({ message: "You have already reviewed this book." });
+    }
+
+    const review = await Review.create({ rating, comment, bookId, userId });
+    res.status(201).json({ message: "Review added successfully!", review });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to add review." });
   }
 };

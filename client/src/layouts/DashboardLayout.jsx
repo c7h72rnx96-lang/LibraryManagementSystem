@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useState, useContext } from "react";
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext.jsx";
 import {
@@ -14,6 +14,8 @@ import {
   FaBoxOpen,
   FaClipboardList,
   FaHeart,
+  FaBars,
+  FaTimes,
 } from "react-icons/fa";
 
 const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
@@ -22,6 +24,9 @@ const DashboardLayout = () => {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // NEW: State ONLY for mobile menu
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -45,11 +50,43 @@ const DashboardLayout = () => {
 
   return (
     <div className="d-flex" style={{ minHeight: "100vh" }}>
-      <style>{`.hover-glow:hover { color: #a855f7 !important; background: rgba(255,255,255,0.02); }`}</style>
+      <style>{`
+        .hover-glow:hover { color: #a855f7 !important; background: rgba(255,255,255,0.02); }
+        
+        /* ✨ EXACT SAME DESKTOP, DIFFERENT CODE FOR PHONE ✨ */
+        @media (max-width: 768px) {
+          .desktop-sidebar {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            margin: 0 !important; /* Removes desktop margins on phone */
+            height: 100vh;
+            border-radius: 0 !important; /* Removes curves on phone edge */
+            z-index: 1050;
+            transition: left 0.3s ease;
+          }
+          .sidebar-closed { left: -300px; }
+          .sidebar-open { left: 0; }
+          
+          .mobile-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            z-index: 1040;
+          }
+        }
+      `}</style>
+
+      {/* MOBILE OVERLAY (Only shows on phone when menu is open) */}
+      {isMobileMenuOpen && (
+        <div
+          className="mobile-overlay d-md-none"
+          onClick={() => setIsMobileMenuOpen(false)}
+        ></div>
+      )}
 
       {/* 🚀 DEEP SPACE SIDEBAR 🚀 */}
       <div
-        className="d-flex flex-column m-3 rounded-4"
+        className={`desktop-sidebar d-flex flex-column m-3 rounded-4 ${isMobileMenuOpen ? "sidebar-open" : "sidebar-closed"}`}
         style={{
           width: "260px",
           minWidth: "260px",
@@ -60,7 +97,15 @@ const DashboardLayout = () => {
           boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
         }}
       >
-        <div className="p-4 text-center mt-2 border-bottom border-light border-opacity-10">
+        <div className="p-4 text-center mt-2 border-bottom border-light border-opacity-10 position-relative">
+          {/* MOBILE CLOSE BUTTON */}
+          <button
+            className="btn text-white d-md-none position-absolute top-0 end-0 m-2 p-0"
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
+            <FaTimes size={20} />
+          </button>
+
           <FaBook
             size={38}
             className="mb-2"
@@ -90,6 +135,7 @@ const DashboardLayout = () => {
                 to="/"
                 className={linkClass("/")}
                 style={location.pathname === "/" ? activeStyle : {}}
+                onClick={() => setIsMobileMenuOpen(false)}
               >
                 <FaTachometerAlt className="me-3 fs-5" /> Dashboard
               </Link>
@@ -99,6 +145,7 @@ const DashboardLayout = () => {
                 to="/books"
                 className={linkClass("/books")}
                 style={location.pathname.includes("/books") ? activeStyle : {}}
+                onClick={() => setIsMobileMenuOpen(false)}
               >
                 <FaBook className="me-3 fs-5" /> Library
               </Link>
@@ -110,6 +157,7 @@ const DashboardLayout = () => {
                 style={
                   location.pathname.includes("/authors") ? activeStyle : {}
                 }
+                onClick={() => setIsMobileMenuOpen(false)}
               >
                 <FaUsers className="me-3 fs-5" /> Authors
               </Link>
@@ -119,6 +167,7 @@ const DashboardLayout = () => {
                 to="/genres"
                 className={linkClass("/genres")}
                 style={location.pathname.includes("/genres") ? activeStyle : {}}
+                onClick={() => setIsMobileMenuOpen(false)}
               >
                 <FaTags className="me-3 fs-5" /> Genres
               </Link>
@@ -139,6 +188,7 @@ const DashboardLayout = () => {
                 style={
                   location.pathname.includes("/wishlist") ? activeStyle : {}
                 }
+                onClick={() => setIsMobileMenuOpen(false)}
               >
                 <FaHeart className="me-3 fs-5" /> Wishlist
               </Link>
@@ -148,6 +198,7 @@ const DashboardLayout = () => {
                 to="/cart"
                 className={linkClass("/cart")}
                 style={location.pathname.includes("/cart") ? activeStyle : {}}
+                onClick={() => setIsMobileMenuOpen(false)}
               >
                 <FaShoppingCart className="me-3 fs-5" /> Cart
               </Link>
@@ -157,6 +208,7 @@ const DashboardLayout = () => {
                 to="/orders"
                 className={linkClass("/orders")}
                 style={location.pathname.includes("/orders") ? activeStyle : {}}
+                onClick={() => setIsMobileMenuOpen(false)}
               >
                 <FaBoxOpen className="me-3 fs-5" /> Orders
               </Link>
@@ -180,6 +232,7 @@ const DashboardLayout = () => {
                         ? activeStyle
                         : {}
                     }
+                    onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <FaClipboardList className="me-3 fs-5" /> Manage Orders
                   </Link>
@@ -202,13 +255,24 @@ const DashboardLayout = () => {
             zIndex: 10,
           }}
         >
-          <div>
-            <h5 className="m-0 fw-bold text-white d-none d-md-block">
-              System Portal
-            </h5>
+          <div className="d-flex align-items-center gap-2">
+            {/* MOBILE HAMBURGER BUTTON (Hidden on Desktop) */}
+            <button
+              className="btn text-white p-1 me-2 d-md-none border-0"
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
+              <FaBars size={22} />
+            </button>
+            <div>
+              <h5 className="m-0 fw-bold text-white d-none d-md-block">
+                System Portal
+              </h5>
+              <h5 className="m-0 fw-bold text-white d-md-none">LibraryMS</h5>
+            </div>
           </div>
 
-          <div className="d-flex align-items-center gap-3">
+          <div className="d-flex align-items-center gap-2 gap-md-3">
+            {/* Search hidden on very small mobile screens */}
             <div
               className="input-group d-none d-lg-flex rounded-pill overflow-hidden"
               style={{
@@ -244,7 +308,7 @@ const DashboardLayout = () => {
             {/* Profile Pill */}
             <Link
               to="/profile"
-              className="d-flex align-items-center gap-2 ms-2 ps-2 pe-3 py-1 rounded-pill text-decoration-none text-white transition-all"
+              className="d-flex align-items-center gap-2 ms-1 ms-md-2 ps-1 pe-2 py-1 rounded-pill text-decoration-none text-white transition-all"
               style={{
                 background: "rgba(255,255,255,0.05)",
                 border: "1px solid rgba(255,255,255,0.1)",
@@ -271,6 +335,7 @@ const DashboardLayout = () => {
               </div>
             </Link>
 
+            {/* Hide logout button background on tiny phones to save space */}
             <button
               onClick={handleLogout}
               className="btn rounded-circle p-2 ms-1"

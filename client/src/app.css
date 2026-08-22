@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 
 * {
   margin: 0;
@@ -7,103 +7,136 @@
 }
 
 body {
-  font-family: "Poppins", sans-serif;
-  background: #f4f7fb;
-  color: #1f2937;
+  font-family: "Plus Jakarta Sans", sans-serif !important;
+  background-color: #020617 !important; /* Deepest Space Slate */
+  background-image:
+    radial-gradient(
+      circle at 15% 50%,
+      rgba(99, 102, 241, 0.12),
+      transparent 25%
+    ),
+    radial-gradient(
+      circle at 85% 30%,
+      rgba(236, 72, 153, 0.12),
+      transparent 25%
+    ) !important;
+  background-attachment: fixed;
+  color: #f8fafc !important; /* Crisp Off-White */
+  -webkit-font-smoothing: antialiased;
 }
 
-a {
-  text-decoration: none;
+/* CUSTOM NEON SCROLLBAR */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #6366f1;
 }
 
-.main-content {
-  padding: 30px;
-}
-
+/* THE PREMIUM DARK GLASS CARDS */
 .card {
-  border: none !important;
-  border-radius: 16px !important;
-  background: #fff;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-  transition: 0.25s ease;
+  background: rgba(15, 23, 42, 0.6) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  color: #f8fafc !important;
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease,
+    border-color 0.3s ease !important;
 }
 
 .card:hover {
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  border-color: rgba(99, 102, 241, 0.3) !important;
+  box-shadow:
+    0 15px 35px rgba(0, 0, 0, 0.7),
+    0 0 20px rgba(99, 102, 241, 0.1) !important;
 }
 
+/* GLOBAL COLOR OVERRIDES FOR DARK THEME */
+.text-dark {
+  color: #f8fafc !important;
+}
+.text-muted {
+  color: #94a3b8 !important;
+}
+.bg-white,
+.bg-light {
+  background: rgba(30, 41, 59, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/* NEON BUTTONS */
 .btn {
-  border-radius: 10px !important;
-  font-weight: 500;
-}
-
-.btn-primary {
-  background: #2563eb !important;
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease !important;
   border: none !important;
 }
-
+.btn-primary {
+  background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899) !important;
+  background-size: 200% 200% !important;
+  color: white !important;
+  animation: gradientShift 5s ease infinite;
+}
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
 .btn-primary:hover {
-  background: #1d4ed8 !important;
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(168, 85, 247, 0.5) !important;
 }
 
 .btn-outline-primary {
-  border-color: #2563eb;
-  color: #2563eb;
+  background: rgba(99, 102, 241, 0.1) !important;
+  color: #a855f7 !important;
+  border: 1px solid rgba(168, 85, 247, 0.4) !important;
 }
-
 .btn-outline-primary:hover {
-  background: #2563eb;
-  color: #fff;
+  background: rgba(168, 85, 247, 0.2) !important;
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.4) !important;
+  color: white !important;
 }
 
+/* DARK MODE INPUTS */
 .form-control,
-.form-select {
-  border-radius: 10px !important;
-  border: 1px solid #dbe3ef !important;
-  height: 46px;
+.form-select,
+.input-group-text {
+  background-color: rgba(15, 23, 42, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #f8fafc !important;
+  border-radius: 12px !important;
+  padding: 0.75rem 1rem !important;
 }
-
 .form-control:focus,
 .form-select:focus {
-  box-shadow: none !important;
-  border-color: #2563eb !important;
+  background-color: rgba(30, 41, 59, 0.9) !important;
+  border-color: #a855f7 !important;
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.3) !important;
+  color: white !important;
 }
 
-.table {
-  margin-bottom: 0;
-}
-
-.table thead {
-  background: #f8fafc;
-}
-
-.table th {
-  font-weight: 600;
-}
-
-.table td,
-.table th {
-  vertical-align: middle;
-}
-
-.badge {
-  border-radius: 20px;
-  padding: 6px 12px;
-}
-
-img {
-  user-select: none;
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 20px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+/* GLOWING TEXT CLASSES */
+.text-gradient {
+  background: linear-gradient(to right, #a855f7, #ec4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }

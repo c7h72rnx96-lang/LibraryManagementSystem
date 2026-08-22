@@ -18,7 +18,6 @@ const OrderDetails = () => {
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [packedItems, setPackedItems] = useState({}); // For visual packing checkboxes!
 
   useEffect(() => {
     fetchOrder();
@@ -55,9 +54,30 @@ const OrderDetails = () => {
     }
   };
 
-  // Toggle visual checkboxes for packing
-  const togglePack = (itemId) => {
-    setPackedItems((prev) => ({ ...prev, [itemId]: !prev[itemId] }));
+  // Save the checkbox status directly to the database!
+  const togglePack = async (itemId, currentStatus) => {
+    const newStatus = !currentStatus;
+
+    // 1. Optimistic UI update (feels instant to the user)
+    setOrder((prevOrder) => ({
+      ...prevOrder,
+      OrderItems: prevOrder.OrderItems.map((item) =>
+        item.id === itemId ? { ...item, isPacked: newStatus } : item,
+      ),
+    }));
+
+    // 2. Background database update
+    try {
+      const token = sessionStorage.getItem("token");
+      await axios.put(
+        `${API_URL}/orders/admin/${id}/items/${itemId}/pack`,
+        { isPacked: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+    } catch (error) {
+      toast.error("Failed to save packing status.");
+      fetchOrder(); // Revert back to database state if it fails
+    }
   };
 
   if (loading)
@@ -142,8 +162,8 @@ const OrderDetails = () => {
                       className="form-check-input"
                       type="checkbox"
                       id={`pack-${item.id}`}
-                      checked={packedItems[item.id] || false}
-                      onChange={() => togglePack(item.id)}
+                      checked={item.isPacked || false}
+                      onChange={() => togglePack(item.id, item.isPacked)}
                       style={{ transform: "scale(1.5)", cursor: "pointer" }}
                     />
                     <label
@@ -206,7 +226,7 @@ const OrderDetails = () => {
               <hr />
               <label className="fw-bold mb-2">Update Shipping Status:</label>
               <select
-                className="form-select form-select-lg fw-bold"
+                className="form-select py-2 fw-bold"
                 value={order.orderStatus}
                 onChange={(e) => handleStatusChange(e.target.value)}
               >

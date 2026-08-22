@@ -1,10 +1,12 @@
 import { BookService } from "../services/bookService.js";
 import { Review } from "../models/index.js";
+
 export const getAllBooks = async (req, res, next) => {
   try {
-    const { search, genreId } = req.query;
+    // FIXED: Grab 'genre' instead of 'genreId' because that is what the frontend sends!
+    const { search, genre } = req.query;
 
-    const books = await BookService.getAllBooks(search, genreId);
+    const books = await BookService.getAllBooks(search, genre);
 
     res.status(200).json(books);
   } catch (err) {
@@ -86,6 +88,7 @@ export const deleteBook = async (req, res, next) => {
     next(err);
   }
 };
+
 // ==========================================
 // ADD BOOK REVIEW
 // ==========================================

@@ -313,3 +313,30 @@ export const getDashboardStats = async (req, res) => {
     res.status(500).json({ message: "Server error fetching stats" });
   }
 };
+// ==========================================
+// 7. ADMIN: TOGGLE PACKED STATUS FOR AN ITEM
+// ==========================================
+export const toggleItemPackedStatus = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Not authorized. Admin only." });
+    }
+
+    const { orderId, itemId } = req.params;
+    const { isPacked } = req.body;
+
+    const orderItem = await OrderItem.findOne({
+      where: { id: itemId, orderId: orderId },
+    });
+
+    if (!orderItem) return res.status(404).json({ message: "Item not found" });
+
+    orderItem.isPacked = isPacked;
+    await orderItem.save();
+
+    res.status(200).json({ message: "Item packing status updated" });
+  } catch (error) {
+    console.error("Toggle Pack Error:", error);
+    res.status(500).json({ message: "Server error updating packing status" });
+  }
+};

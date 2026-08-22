@@ -6,7 +6,8 @@ import Cart from "./Cart.js";
 import CartItem from "./CartItem.js";
 import Order from "./Order.js";
 import OrderItem from "./OrderItem.js";
-import Review from "./Review.js"; // <-- NEW IMPORT
+import Review from "./Review.js";
+import Wishlist from "./Wishlist.js"; // <-- NEW IMPORT
 
 // --- BOOK RELATIONSHIPS ---
 Author.hasMany(Book, { foreignKey: "authorId" });
@@ -35,11 +36,29 @@ OrderItem.belongsTo(Order, { foreignKey: "orderId" });
 Book.hasMany(OrderItem, { foreignKey: "bookId" });
 OrderItem.belongsTo(Book, { foreignKey: "bookId" });
 
-// --- NEW: REVIEW RELATIONSHIPS ---
+// --- REVIEW RELATIONSHIPS ---
 User.hasMany(Review, { foreignKey: "userId" });
 Review.belongsTo(User, { foreignKey: "userId" });
 
 Book.hasMany(Review, { foreignKey: "bookId" });
 Review.belongsTo(Book, { foreignKey: "bookId" });
 
-export { User, Author, Genre, Book, Cart, CartItem, Order, OrderItem, Review }; // <-- EXPORTED REVIEW
+// --- WISHLIST RELATIONSHIPS ---
+User.hasMany(Wishlist, { foreignKey: "userId" });
+Wishlist.belongsTo(User, { foreignKey: "userId" });
+
+Book.hasMany(Wishlist, { foreignKey: "bookId", onDelete: "CASCADE" });
+Wishlist.belongsTo(Book, { foreignKey: "bookId" });
+
+export {
+  User,
+  Author,
+  Genre,
+  Book,
+  Cart,
+  CartItem,
+  Order,
+  OrderItem,
+  Review,
+  Wishlist,
+};

@@ -1,34 +1,51 @@
-import { fetchAPI } from "../utils/api.js";
+import axios from "axios";
+
+const API_URL = `${import.meta.env.VITE_API_URL}/books`;
 
 const BookService = {
-  // We pass search and genreId to filter the books
-  getAll: (search = "", genreId = "") => {
-    const query = new URLSearchParams();
-    if (search) query.append("search", search);
-    if (genreId) query.append("genreId", genreId);
-
-    return fetchAPI(`/books?${query.toString()}`);
+  // We use params here so Axios automatically builds the URL perfectly!
+  // (e.g. /books?search=quiet&genre=1)
+  getAll: async (search = "", genre = "") => {
+    const response = await axios.get(API_URL, {
+      params: { search, genre },
+    });
+    return response.data;
   },
 
-  getById: (id) => fetchAPI(`/books/${id}`),
+  getById: async (id) => {
+    const response = await axios.get(`${API_URL}/${id}`);
+    return response.data;
+  },
 
-  // Notice we don't use JSON.stringify here because we are sending a FormData object containing a file
-  create: (formData) =>
-    fetchAPI("/books", {
-      method: "POST",
-      body: formData,
-    }),
+  create: async (data) => {
+    const token = sessionStorage.getItem("token");
+    const response = await axios.post(API_URL, data, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return response.data;
+  },
 
-  update: (id, formData) =>
-    fetchAPI(`/books/${id}`, {
-      method: "PUT",
-      body: formData,
-    }),
+  update: async (id, data) => {
+    const token = sessionStorage.getItem("token");
+    const response = await axios.put(`${API_URL}/${id}`, data, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return response.data;
+  },
 
-  delete: (id) =>
-    fetchAPI(`/books/${id}`, {
-      method: "DELETE",
-    }),
+  delete: async (id) => {
+    const token = sessionStorage.getItem("token");
+    const response = await axios.delete(`${API_URL}/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
 };
 
 export default BookService;

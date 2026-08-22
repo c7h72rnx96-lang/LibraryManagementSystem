@@ -201,7 +201,7 @@ const BookDetails = () => {
                 <div className="mb-3">
                   <label className="form-label fw-bold">Rating</label>
                   <select
-                    className="form-select form-select-lg text-warning fw-bold"
+                    className="form-select py-2 text-warning fw-bold"
                     value={rating}
                     onChange={(e) => setRating(Number(e.target.value))}
                   >

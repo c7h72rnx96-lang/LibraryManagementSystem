@@ -1,17 +1,36 @@
 import Book from "../models/Book.js";
 import Author from "../models/Author.js";
 import Genre from "../models/Genre.js";
-import Review from "../models/Review.js"; // <-- NEW
-import User from "../models/User.js"; // <-- NEW
+import Review from "../models/Review.js";
+import User from "../models/User.js";
 import { Op } from "sequelize";
 
 export const BookService = {
-  getAllBooks: async (search = "", genreId = "") => {
+  getAllBooks: async (searchParam = "", genreParam = "") => {
+    let search = "";
+    let genreId = "";
+
+    // SMART EXTRACTION: This handles the data safely whether your
+    // controller passes it as a single object (req.query) or as individual strings!
+    if (typeof searchParam === "object" && searchParam !== null) {
+      search = searchParam.search || searchParam.author || "";
+      genreId = searchParam.genre || searchParam.genreId || "";
+    } else {
+      search = searchParam || "";
+      genreId = genreParam || "";
+    }
+
     const whereClause = {};
 
+    // 1. Apply the Search Filter (Titles & Authors)
     if (search) {
-      whereClause.title = { [Op.like]: `%${search}%` };
+      whereClause[Op.or] = [
+        { title: { [Op.iLike]: `%${search}%` } },
+        { "$Author.name$": { [Op.iLike]: `%${search}%` } },
+      ];
     }
+
+    // 2. Apply the Genre Dropdown Filter
     if (genreId) {
       whereClause.genreId = genreId;
     }
@@ -22,10 +41,11 @@ export const BookService = {
         { model: Author, attributes: ["id", "name"] },
         { model: Genre, attributes: ["id", "name"] },
       ],
+      order: [["id", "ASC"]],
+      subQuery: false, // <-- CRUCIAL FIX: Prevents Sequelize from breaking when combining filters
     });
   },
 
-  // UPGRADED: Now fetches Reviews and the User who wrote them!
   getBookById: async (id) => {
     return await Book.findByPk(id, {
       include: [
@@ -34,7 +54,7 @@ export const BookService = {
         {
           model: Review,
           include: [{ model: User, attributes: ["username", "avatar"] }],
-          order: [["createdAt", "DESC"]], // Newest reviews first
+          order: [["createdAt", "DESC"]],
         },
       ],
     });

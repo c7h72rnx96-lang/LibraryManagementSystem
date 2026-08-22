@@ -8,7 +8,8 @@ const OrderItem = sequelize.define(
     orderId: { type: DataTypes.INTEGER, allowNull: false },
     bookId: { type: DataTypes.INTEGER, allowNull: false },
     quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
-    priceAtPurchase: { type: DataTypes.DECIMAL(10, 2), allowNull: false }, // Freezes the price so future price changes don't affect old orders
+    priceAtPurchase: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    isPacked: { type: DataTypes.BOOLEAN, defaultValue: false }, // <-- NEW FIELD
   },
   {
     tableName: "order_items",

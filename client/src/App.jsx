@@ -16,6 +16,7 @@ import Books from "./pages/Books/Books.jsx";
 import AddBook from "./pages/AddBook/AddBook.jsx";
 import Profile from "./pages/Profile/Profile.jsx";
 import BookDetails from "./pages/BookDetails/BookDetails.jsx";
+import Wishlist from "./pages/Wishlist/Wishlist.jsx";
 function App() {
   return (
     <Routes>
@@ -45,6 +46,7 @@ function App() {
         <Route path="books/add" element={<AddBook />} />
         <Route path="books/edit/:id" element={<AddBook />} />
         <Route path="books/:id" element={<BookDetails />} />
+        <Route path="wishlist" element={<Wishlist />} />
       </Route>
     </Routes>
   );

@@ -6,8 +6,9 @@ import bookRoutes from "./routes/bookRoutes.js";
 import genreRoutes from "./routes/genreRoutes.js";
 import authorRoutes from "./routes/authorRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
-import cartRoutes from "./routes/cartRoutes.js"; // <-- ADD THIS IMPORT
+import cartRoutes from "./routes/cartRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
+import wishlistRoutes from "./routes/wishlistRoutes.js"; // <-- NEW IMPORT
 
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 
@@ -31,9 +32,7 @@ app.use(express.json());
 app.use("/uploads", express.static("src/uploads"));
 
 app.get("/", (req, res) => {
-  res.json({
-    message: "Library Management API Running 🚀",
-  });
+  res.json({ message: "Library Management API Running 🚀" });
 });
 
 app.use("/api/auth", authRoutes);
@@ -41,8 +40,9 @@ app.use("/api/books", bookRoutes);
 app.use("/api/genres", genreRoutes);
 app.use("/api/authors", authorRoutes);
 app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/cart", cartRoutes); // <-- ADD THIS ROUTE
+app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/wishlist", wishlistRoutes); // <-- MOUNTED ROUTE
 
 app.use(notFoundHandler);
 app.use(errorHandler);

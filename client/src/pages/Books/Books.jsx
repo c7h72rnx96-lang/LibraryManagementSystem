@@ -1,3 +1,4 @@
+// === src/pages/Books/Books.jsx ===
 import React, { useState, useEffect, useContext } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -8,6 +9,7 @@ import {
   FaBookOpen,
   FaShoppingCart,
   FaHeart,
+  FaCheckSquare,
 } from "react-icons/fa";
 import { AuthContext } from "../../context/AuthContext.jsx";
 import axios from "axios";
@@ -35,6 +37,9 @@ const Books = () => {
 
   const [searchTerm, setSearchTerm] = useState(urlAuthor);
   const [selectedGenre, setSelectedGenre] = useState("");
+
+  // 🔥 NEW: Bulk Selection State
+  const [selectedBooks, setSelectedBooks] = useState([]);
 
   useEffect(() => {
     const loadGenres = async () => {
@@ -87,6 +92,33 @@ const Books = () => {
     fetchBooks();
   }, [searchTerm, selectedGenre]);
 
+  // Check if current user has permission to manage a specific book
+  const canManage = (book) =>
+    user?.role === "admin" ||
+    (user?.role === "seller" && book.sellerId === user.id);
+
+  // Get all books currently on screen that the user is allowed to select
+  const manageableBooks = books.filter(canManage);
+
+  const handleSelectAll = () => {
+    if (
+      selectedBooks.length === manageableBooks.length &&
+      manageableBooks.length > 0
+    ) {
+      setSelectedBooks([]); // Deselect all
+    } else {
+      setSelectedBooks(manageableBooks.map((b) => b.id)); // Select all manageable
+    }
+  };
+
+  const toggleSelection = (bookId) => {
+    setSelectedBooks((prev) =>
+      prev.includes(bookId)
+        ? prev.filter((id) => id !== bookId)
+        : [...prev, bookId],
+    );
+  };
+
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this book?")) return;
     try {
@@ -94,8 +126,31 @@ const Books = () => {
       toast.success("Book deleted successfully!");
       const updatedBooks = await BookService.getAll(searchTerm, selectedGenre);
       setBooks(updatedBooks);
+      setSelectedBooks((prev) => prev.filter((bId) => bId !== id)); // Remove from selection if it was checked
     } catch (error) {
       toast.error(error.message);
+    }
+  };
+
+  // 🔥 NEW: Execute Bulk Delete
+  const handleBulkDelete = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to permanently delete ${selectedBooks.length} books?`,
+      )
+    )
+      return;
+    const toastId = toast.loading(`Deleting ${selectedBooks.length} books...`);
+    try {
+      await BookService.deleteBulk(selectedBooks);
+      toast.success(`${selectedBooks.length} books deleted!`, { id: toastId });
+      setSelectedBooks([]);
+
+      // Refresh library
+      const updatedBooks = await BookService.getAll(searchTerm, selectedGenre);
+      setBooks(updatedBooks);
+    } catch (error) {
+      toast.error("Failed to delete books.", { id: toastId });
     }
   };
 
@@ -131,25 +186,56 @@ const Books = () => {
   };
 
   return (
-    <div className="container-fluid">
+    <div className="container-fluid position-relative pb-5">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h2 className="fw-bold">Books</h2>
           <p className="text-muted mb-0">Manage your library collection</p>
         </div>
 
-        {/* 🔥 Show Add Book button to both Admin AND Seller */}
-        {(user?.role === "admin" || user?.role === "seller") && (
-          <Link to="/books/add" className="btn btn-primary px-4">
-            <FaPlus className="me-2" /> Add Book
-          </Link>
-        )}
+        <div className="d-flex gap-2">
+          {/* 🔥 Show Bulk Delete button when items are selected */}
+          {selectedBooks.length > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              className="btn btn-danger fw-bold px-4 shadow-sm animate__animated animate__fadeIn"
+            >
+              <FaTrash className="me-2" /> Delete Selected (
+              {selectedBooks.length})
+            </button>
+          )}
+
+          {(user?.role === "admin" || user?.role === "seller") && (
+            <Link
+              to="/books/add"
+              className="btn btn-primary fw-bold px-4 shadow-sm"
+            >
+              <FaPlus className="me-2" /> Add Book
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="card mb-4 shadow-sm border-0">
         <div className="card-body">
-          <div className="row g-3">
-            <div className="col-md-8">
+          <div className="row g-3 align-items-center">
+            {/* 🔥 NEW: Select All Checkbox for Admins/Sellers */}
+            {(user?.role === "admin" || user?.role === "seller") &&
+              manageableBooks.length > 0 && (
+                <div className="col-auto ps-3 pe-0">
+                  <button
+                    onClick={handleSelectAll}
+                    className={`btn btn-sm fw-bold border ${selectedBooks.length === manageableBooks.length ? "btn-primary" : "btn-outline-secondary"}`}
+                  >
+                    <FaCheckSquare className="me-1" />{" "}
+                    {selectedBooks.length === manageableBooks.length
+                      ? "Deselect All"
+                      : "Select All"}
+                  </button>
+                </div>
+              )}
+
+            <div className="col flex-grow-1">
               <div className="input-group">
                 <span className="input-group-text bg-white">
                   <FaSearch />
@@ -163,7 +249,7 @@ const Books = () => {
                 />
               </div>
             </div>
-            <div className="col-md-4">
+            <div className="col-md-3">
               <select
                 className="form-select"
                 value={selectedGenre}
@@ -187,146 +273,169 @@ const Books = () => {
         </div>
       ) : (
         <div className="row g-4">
-          {books.map((book) => (
-            <div key={book.id} className="col-md-6 col-lg-4">
-              <div className="card h-100 shadow-sm border-0 position-relative">
+          {books.map((book) => {
+            const isManageable = canManage(book);
+            const isSelected = selectedBooks.includes(book.id);
+
+            return (
+              <div key={book.id} className="col-md-6 col-lg-4">
                 <div
-                  className="position-absolute top-0 end-0 m-2"
-                  style={{ zIndex: 10 }}
+                  className={`card h-100 shadow-sm border-0 position-relative transition-all ${isSelected ? "ring-2 ring-primary bg-primary bg-opacity-10" : ""}`}
+                  style={{ border: isSelected ? "2px solid #3b82f6" : "none" }}
                 >
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleWishlistToggle(book.id);
-                    }}
-                    className="btn btn-light rounded-circle shadow-sm d-flex justify-content-center align-items-center border-0"
-                    style={{
-                      width: "40px",
-                      height: "40px",
-                      backgroundColor: "rgba(255,255,255,0.9)",
-                    }}
-                  >
-                    <FaHeart
-                      className={
-                        wishlistIds.includes(book.id)
-                          ? "text-danger fs-5"
-                          : "text-secondary fs-5"
-                      }
-                    />
-                  </button>
-                </div>
-
-                {book.image ? (
-                  <img
-                    src={
-                      book.image.startsWith("http")
-                        ? book.image
-                        : `${SERVER_URL}/uploads/${book.image}`
-                    }
-                    alt={book.title}
-                    className="card-img-top"
-                    style={{
-                      height: "240px",
-                      objectFit: "cover",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => navigate(`/books/${book.id}`)}
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = `https://placehold.co/400x600/1e293b/ffffff?text=No+Cover`;
-                    }}
-                  />
-                ) : (
+                  {/* TOP CORNER ACTION BADGES */}
                   <div
-                    className="d-flex justify-content-center align-items-center bg-light"
-                    style={{ height: "240px", cursor: "pointer" }}
-                    onClick={() => navigate(`/books/${book.id}`)}
+                    className="position-absolute top-0 w-100 d-flex justify-content-between p-2"
+                    style={{ zIndex: 10 }}
                   >
-                    <FaBookOpen size={50} color="#999" />
+                    {/* LEFT CORNER: SELECT CHECKBOX */}
+                    <div>
+                      {isManageable && (
+                        <input
+                          type="checkbox"
+                          className="form-check-input ms-1 shadow-sm"
+                          style={{ transform: "scale(1.5)", cursor: "pointer" }}
+                          checked={isSelected}
+                          onChange={() => toggleSelection(book.id)}
+                        />
+                      )}
+                    </div>
+                    {/* RIGHT CORNER: WISHLIST ICON */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleWishlistToggle(book.id);
+                      }}
+                      className="btn btn-light rounded-circle shadow-sm d-flex justify-content-center align-items-center border-0 p-0"
+                      style={{
+                        width: "40px",
+                        height: "40px",
+                        backgroundColor: "rgba(255,255,255,0.9)",
+                      }}
+                    >
+                      <FaHeart
+                        className={
+                          wishlistIds.includes(book.id)
+                            ? "text-danger fs-5"
+                            : "text-secondary fs-5"
+                        }
+                      />
+                    </button>
                   </div>
-                )}
 
-                <div className="card-body d-flex flex-column">
-                  <h5
-                    className="fw-bold text-primary"
-                    style={{ cursor: "pointer" }}
-                    onClick={() => navigate(`/books/${book.id}`)}
-                  >
-                    {book.title}
-                  </h5>
-                  <p className="mb-1 text-muted small">
-                    <strong>Author:</strong> {book.Author?.name}
-                  </p>
+                  {/* COVER IMAGE */}
+                  {book.image ? (
+                    <img
+                      src={
+                        book.image.startsWith("http")
+                          ? book.image
+                          : `${SERVER_URL}/uploads/${book.image}`
+                      }
+                      alt={book.title}
+                      className="card-img-top"
+                      style={{
+                        height: "240px",
+                        objectFit: "cover",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => navigate(`/books/${book.id}`)}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = `https://placehold.co/400x600/1e293b/ffffff?text=No+Cover`;
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="d-flex justify-content-center align-items-center bg-light"
+                      style={{ height: "240px", cursor: "pointer" }}
+                      onClick={() => navigate(`/books/${book.id}`)}
+                    >
+                      <FaBookOpen size={50} color="#999" />
+                    </div>
+                  )}
 
-                  <div className="mb-3">
-                    {book.discountPercentage > 0 ? (
-                      <div className="d-flex align-items-center gap-2">
-                        <span className="fw-bold text-success fs-5">
-                          Rs.{" "}
-                          {(
-                            book.price *
-                            (1 - book.discountPercentage / 100)
-                          ).toFixed(2)}
-                        </span>
-                        <span className="text-decoration-line-through text-muted small">
+                  {/* DETAILS */}
+                  <div className="card-body d-flex flex-column">
+                    <h5
+                      className="fw-bold text-primary text-truncate"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => navigate(`/books/${book.id}`)}
+                      title={book.title}
+                    >
+                      {book.title}
+                    </h5>
+                    <p className="mb-1 text-muted small">
+                      <strong>Author:</strong> {book.Author?.name}
+                    </p>
+
+                    <div className="mb-3">
+                      {book.discountPercentage > 0 ? (
+                        <div className="d-flex align-items-center gap-2">
+                          <span className="fw-bold text-success fs-5">
+                            Rs.{" "}
+                            {(
+                              book.price *
+                              (1 - book.discountPercentage / 100)
+                            ).toFixed(2)}
+                          </span>
+                          <span className="text-decoration-line-through text-muted small">
+                            Rs. {Number(book.price).toFixed(2)}
+                          </span>
+                          <span className="badge bg-danger">
+                            -{book.discountPercentage}%
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="fw-bold fs-5">
                           Rs. {Number(book.price).toFixed(2)}
                         </span>
-                        <span className="badge bg-danger">
-                          -{book.discountPercentage}%
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="fw-bold fs-5">
-                        Rs. {Number(book.price).toFixed(2)}
-                      </span>
-                    )}
-                  </div>
+                      )}
+                    </div>
 
-                  <p className="mb-3">
-                    <strong>Stock:</strong>
-                    <span
-                      className={`badge ms-2 ${book.stock < 1 ? "bg-danger" : "bg-success"}`}
-                    >
-                      {book.stock}
-                    </span>
-                  </p>
-
-                  <div className="mt-auto d-flex flex-column gap-2">
-                    {user && (
-                      <button
-                        onClick={() => handleAddToCart(book.id)}
-                        className="btn btn-success w-100"
-                        disabled={book.stock < 1}
+                    <p className="mb-3">
+                      <strong>Stock:</strong>
+                      <span
+                        className={`badge ms-2 ${book.stock < 1 ? "bg-danger" : "bg-success"}`}
                       >
-                        <FaShoppingCart className="me-2" />{" "}
-                        {book.stock < 1 ? "Out of Stock" : "Add to Cart"}
-                      </button>
-                    )}
+                        {book.stock}
+                      </span>
+                    </p>
 
-                    {/* 🔥 Admin can edit ANY book. Sellers can ONLY edit their own books! */}
-                    {(user?.role === "admin" ||
-                      (user?.role === "seller" &&
-                        book.sellerId === user.id)) && (
-                      <div className="d-flex gap-2">
-                        <Link
-                          to={`/books/edit/${book.id}`}
-                          className="btn btn-primary flex-fill"
-                        >
-                          <FaEdit className="me-1" /> Edit
-                        </Link>
+                    <div className="mt-auto d-flex flex-column gap-2">
+                      {user && (
                         <button
-                          onClick={() => handleDelete(book.id)}
-                          className="btn btn-danger flex-fill"
+                          onClick={() => handleAddToCart(book.id)}
+                          className="btn btn-success w-100 fw-bold"
+                          disabled={book.stock < 1}
                         >
-                          <FaTrash className="me-1" /> Delete
+                          <FaShoppingCart className="me-2" />{" "}
+                          {book.stock < 1 ? "Out of Stock" : "Add to Cart"}
                         </button>
-                      </div>
-                    )}
+                      )}
+
+                      {/* EDIT/DELETE ACTIONS */}
+                      {isManageable && (
+                        <div className="d-flex gap-2">
+                          <Link
+                            to={`/books/edit/${book.id}`}
+                            className="btn btn-primary flex-fill"
+                          >
+                            <FaEdit className="me-1" /> Edit
+                          </Link>
+                          <button
+                            onClick={() => handleDelete(book.id)}
+                            className="btn btn-danger flex-fill"
+                          >
+                            <FaTrash className="me-1" /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {books.length === 0 && (
             <div className="col-12 text-center py-5">
               <FaBookOpen size={60} className="text-secondary mb-3" />

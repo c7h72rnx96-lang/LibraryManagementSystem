@@ -8,7 +8,8 @@ import {
   getDashboardStats,
   toggleItemPackedStatus,
   getSellerOrders,
-  getSellerWalletStats, // <-- ADDED THIS IMPORT
+  getSellerWalletStats,
+  generateInvoice, // <-- 1. ADD THIS IMPORT
 } from "../controllers/orderController.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 
@@ -31,7 +32,7 @@ router.get(
   authenticate,
   authorize("seller"),
   getSellerWalletStats,
-); // <-- ADDED THIS ROUTE
+);
 
 // Shared Admin/Seller route
 router.put(
@@ -40,5 +41,8 @@ router.put(
   authorize("admin", "seller"),
   toggleItemPackedStatus,
 );
+
+// Shared Admin/Customer Invoice Download Route
+router.get("/:id/invoice", authenticate, generateInvoice); // <-- 2. ADD THIS ROUTE
 
 export default router;

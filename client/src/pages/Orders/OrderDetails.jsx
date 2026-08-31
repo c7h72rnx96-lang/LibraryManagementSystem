@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom"; // 🔥 Added useParams here
 import axios from "axios";
 import {
   FaArrowLeft,
@@ -51,6 +51,32 @@ const OrderDetails = () => {
     } catch (error) {
       console.error(error);
       toast.error("Failed to update status");
+    }
+  };
+
+  // 🔥 MOVED OUTSIDE: PDF Invoice Generator
+  const handleDownloadInvoice = async () => {
+    const toastId = toast.loading("Generating PDF...");
+    try {
+      const token = sessionStorage.getItem("token");
+      const response = await axios.get(`${API_URL}/orders/${id}/invoice`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob", // CRITICAL: Expect binary file
+      });
+
+      // Create a temporary link element to trigger the browser download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `LibraryMS_Invoice_${id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      toast.success("Invoice downloaded!", { id: toastId });
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to download invoice", { id: toastId });
     }
   };
 
@@ -112,10 +138,10 @@ const OrderDetails = () => {
           </span>
         </div>
         <button
-          onClick={() => window.print()}
+          onClick={handleDownloadInvoice}
           className="btn btn-outline-primary shadow-sm"
         >
-          <FaPrint className="me-2" /> Print Slip
+          <FaPrint className="me-2" /> Download PDF Invoice
         </button>
       </div>
 

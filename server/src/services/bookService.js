@@ -1,3 +1,4 @@
+// === server/src/services/bookService.js ===
 import Book from "../models/Book.js";
 import Author from "../models/Author.js";
 import Genre from "../models/Genre.js";
@@ -10,8 +11,6 @@ export const BookService = {
     let search = "";
     let genreId = "";
 
-    // SMART EXTRACTION: This handles the data safely whether your
-    // controller passes it as a single object (req.query) or as individual strings!
     if (typeof searchParam === "object" && searchParam !== null) {
       search = searchParam.search || searchParam.author || "";
       genreId = searchParam.genre || searchParam.genreId || "";
@@ -22,7 +21,6 @@ export const BookService = {
 
     const whereClause = {};
 
-    // 1. Apply the Search Filter (Titles & Authors)
     if (search) {
       whereClause[Op.or] = [
         { title: { [Op.iLike]: `%${search}%` } },
@@ -30,7 +28,6 @@ export const BookService = {
       ];
     }
 
-    // 2. Apply the Genre Dropdown Filter
     if (genreId) {
       whereClause.genreId = genreId;
     }
@@ -42,7 +39,7 @@ export const BookService = {
         { model: Genre, attributes: ["id", "name"] },
       ],
       order: [["id", "ASC"]],
-      subQuery: false, // <-- CRUCIAL FIX: Prevents Sequelize from breaking when combining filters
+      subQuery: false,
     });
   },
 
@@ -75,5 +72,18 @@ export const BookService = {
     if (!book) return null;
     await book.destroy();
     return true;
+  },
+
+  // 🔥 NEW: Bulk Delete from Database
+  deleteBulkBooks: async (ids, userId, role) => {
+    const whereClause = { id: { [Op.in]: ids } };
+
+    // Security: If the user is a Seller, ONLY allow them to delete books they own
+    if (role !== "admin") {
+      whereClause.sellerId = userId;
+    }
+
+    const deletedCount = await Book.destroy({ where: whereClause });
+    return deletedCount;
   },
 };

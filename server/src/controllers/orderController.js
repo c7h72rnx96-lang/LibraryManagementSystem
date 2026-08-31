@@ -8,6 +8,7 @@ import {
 } from "../models/index.js";
 import { sequelize } from "../config/database.js";
 import { Op } from "sequelize";
+import PDFDocument from "pdfkit";
 
 // ==========================================
 // 1. CUSTOMER: CREATE A NEW ORDER (FINAL FORM)
@@ -17,8 +18,16 @@ export const createOrder = async (req, res) => {
 
   try {
     const userId = req.user.id;
-    const { fullName, phone, address, city, paymentMethod, cartItemIds } =
-      req.body;
+    const {
+      fullName,
+      phone,
+      address,
+      city,
+      paymentMethod,
+      cartItemIds,
+      couponCode,
+      redeemPoints = 0,
+    } = req.body;
 
     if (!cartItemIds || cartItemIds.length === 0) {
       await transaction.rollback();
@@ -38,7 +47,6 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ message: "Your cart is empty" });
     }
 
-    // Filter to only checkout selected items
     const selectedItems = cart.CartItems.filter((item) =>
       cartItemIds.includes(item.id),
     );
@@ -52,7 +60,7 @@ export const createOrder = async (req, res) => {
 
     let subtotal = 0;
 
-    // Validate stock first
+    // Validate stock and calculate raw item subtotal
     for (const item of selectedItems) {
       const book = item.Book;
       if (book.stock < item.quantity) {
@@ -70,10 +78,59 @@ export const createOrder = async (req, res) => {
       subtotal += effectivePrice * item.quantity;
     }
 
-    const deliveryFee = subtotal >= 1000 ? 0 : 100;
-    const grandTotal = subtotal + deliveryFee;
+    // --- 1. COUPON REDUCTION ENGINE ---
+    let couponDiscount = 0;
+    let appliedCoupon = null;
 
-    // Create the Parent Order
+    if (couponCode) {
+      appliedCoupon = await Coupon.findOne({
+        where: { code: couponCode.trim().toUpperCase(), isActive: true },
+        transaction,
+      });
+
+      if (appliedCoupon && subtotal >= Number(appliedCoupon.minOrderAmount)) {
+        if (appliedCoupon.discountType === "percentage") {
+          couponDiscount =
+            (subtotal * Number(appliedCoupon.discountValue)) / 100;
+          if (
+            appliedCoupon.maxDiscountAmount &&
+            couponDiscount > Number(appliedCoupon.maxDiscountAmount)
+          ) {
+            couponDiscount = Number(appliedCoupon.maxDiscountAmount);
+          }
+        } else {
+          couponDiscount = Math.min(
+            Number(appliedCoupon.discountValue),
+            subtotal,
+          );
+        }
+
+        appliedCoupon.usedCount += 1;
+        await appliedCoupon.save({ transaction });
+      }
+    }
+
+    // --- 2. LOYALTY POINTS REDEMPTION ENGINE ---
+    const customer = await User.findByPk(userId, { transaction });
+    let loyaltyDiscount = 0;
+    const requestedPoints = Math.max(0, parseInt(redeemPoints) || 0);
+
+    if (requestedPoints > 0) {
+      const availablePoints = customer.loyaltyPoints || 0;
+      const pointsToRedeem = Math.min(
+        requestedPoints,
+        availablePoints,
+        Math.floor(subtotal - couponDiscount),
+      );
+      loyaltyDiscount = pointsToRedeem; // 1 point = Rs. 1
+      customer.loyaltyPoints -= pointsToRedeem;
+    }
+
+    const deliveryFee = subtotal >= 1000 ? 0 : 100;
+    const grandTotal =
+      Math.max(0, subtotal - couponDiscount - loyaltyDiscount) + deliveryFee;
+
+    // Create the Order
     const order = await Order.create(
       {
         userId,
@@ -91,7 +148,7 @@ export const createOrder = async (req, res) => {
       { transaction },
     );
 
-    // 🔥 THE COMMISSION ENGINE & LOYALTY POINTS
+    // Split order items and compute seller earnings
     let totalLoyaltyPointsEarned = 0;
 
     for (const item of selectedItems) {
@@ -104,7 +161,6 @@ export const createOrder = async (req, res) => {
 
       const itemTotal = effectivePrice * item.quantity;
 
-      // Dynamic Commission logic (Admin gets X%, Seller gets the rest)
       const seller = await User.findByPk(book.sellerId, { transaction });
       const commissionRate = seller ? seller.commissionRate : 10.0;
 
@@ -115,7 +171,7 @@ export const createOrder = async (req, res) => {
         {
           orderId: order.id,
           bookId: book.id,
-          sellerId: book.sellerId, // Exact routing for the seller dashboard
+          sellerId: book.sellerId,
           quantity: item.quantity,
           priceAtPurchase: effectivePrice,
           commissionCut,
@@ -129,28 +185,29 @@ export const createOrder = async (req, res) => {
       book.stock -= item.quantity;
       await book.save({ transaction });
 
-      // Calculate points (1 point per Rs. 100 spent)
+      // Calculate new loyalty points (1 point per Rs. 100 spent net)
       totalLoyaltyPointsEarned += Math.floor(itemTotal / 100);
     }
 
-    // Award loyalty points to the customer!
-    const customer = await User.findByPk(userId, { transaction });
-    if (customer) {
-      customer.loyaltyPoints =
-        (customer.loyaltyPoints || 0) + totalLoyaltyPointsEarned;
-      await customer.save({ transaction });
-    }
+    // Award new points
+    customer.loyaltyPoints =
+      (customer.loyaltyPoints || 0) + totalLoyaltyPointsEarned;
+    await customer.save({ transaction });
 
-    // Delete ONLY checked-out items from cart
+    // Clean up purchased cart items
     await CartItem.destroy({
       where: { id: { [Op.in]: cartItemIds } },
       transaction,
     });
 
     await transaction.commit();
-    res
-      .status(201)
-      .json({ message: "Order placed successfully!", orderId: order.id });
+    res.status(201).json({
+      message: "Order placed successfully!",
+      orderId: order.id,
+      pointsEarned: totalLoyaltyPointsEarned,
+      loyaltyDiscount,
+      couponDiscount,
+    });
   } catch (error) {
     await transaction.rollback();
     console.error("Checkout Error:", error);
@@ -474,5 +531,148 @@ export const getSellerWalletStats = async (req, res) => {
   } catch (error) {
     console.error("Wallet Stats Error:", error);
     res.status(500).json({ message: "Server error fetching wallet stats" });
+  }
+};
+// ==========================================
+// 10. GENERATE PDF INVOICE
+// ==========================================
+export const generateInvoice = async (req, res) => {
+  try {
+    const order = await Order.findByPk(req.params.id, {
+      include: [
+        { model: User, attributes: ["username", "email"] },
+        { model: OrderItem, include: [Book] },
+      ],
+    });
+
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Security: Only Admins or the Customer who placed the order can download it
+    if (req.user.role !== "admin" && req.user.id !== order.userId) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to view this invoice." });
+    }
+
+    // Initialize PDF Document
+    const doc = new PDFDocument({ margin: 50, size: "A4" });
+
+    // Set headers to trigger a file download in the browser
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=Invoice-${order.id}.pdf`,
+    );
+
+    // Pipe the PDF directly to the Express response
+    doc.pipe(res);
+
+    // --- PDF LAYOUT & STYLING ---
+    // Header
+    doc
+      .fontSize(24)
+      .font("Helvetica-Bold")
+      .text("LibraryMS", { align: "left" });
+    doc
+      .fontSize(10)
+      .font("Helvetica")
+      .text("Official Marketplace Receipt", { align: "left" });
+    doc.moveDown(2);
+
+    // Order Info
+    doc.fontSize(12).font("Helvetica-Bold").text("INVOICE DETAILS");
+    doc.font("Helvetica").text(`Order ID: #${order.id}`);
+    doc.text(`Date: ${new Date(order.createdAt).toLocaleString()}`);
+    doc.text(`Payment Method: ${order.paymentMethod}`);
+    doc.text(`Status: ${order.paymentStatus}`);
+    doc.moveDown();
+
+    // Customer Info
+    doc.font("Helvetica-Bold").text("BILLED TO");
+    doc.font("Helvetica").text(order.fullName);
+    doc.text(`${order.address}, ${order.city}`);
+    doc.text(`Phone: ${order.phone}`);
+    doc.text(`Email: ${order.User?.email}`);
+    doc.moveDown(2);
+
+    // Table Headers
+    const tableTop = doc.y;
+    doc.font("Helvetica-Bold");
+    doc.text("Item Title", 50, tableTop);
+    doc.text("Qty", 350, tableTop, { width: 50, align: "center" });
+    doc.text("Unit Price", 400, tableTop, { width: 70, align: "right" });
+    doc.text("Total", 470, tableTop, { width: 70, align: "right" });
+
+    doc
+      .moveTo(50, tableTop + 15)
+      .lineTo(540, tableTop + 15)
+      .stroke();
+    let position = tableTop + 25;
+
+    // Table Rows
+    doc.font("Helvetica");
+    order.OrderItems.forEach((item) => {
+      const lineTotal = Number(item.priceAtPurchase) * item.quantity;
+      doc.text(item.Book?.title || "Unknown Book", 50, position, {
+        width: 290,
+      });
+      doc.text(item.quantity.toString(), 350, position, {
+        width: 50,
+        align: "center",
+      });
+      doc.text(
+        `Rs. ${Number(item.priceAtPurchase).toFixed(2)}`,
+        400,
+        position,
+        { width: 70, align: "right" },
+      );
+      doc.text(`Rs. ${lineTotal.toFixed(2)}`, 470, position, {
+        width: 70,
+        align: "right",
+      });
+      position += 20;
+    });
+
+    // Totals Section
+    doc
+      .moveTo(50, position + 10)
+      .lineTo(540, position + 10)
+      .stroke();
+    position += 25;
+
+    doc.font("Helvetica-Bold");
+    doc.text("Delivery Fee:", 350, position, { width: 120, align: "right" });
+    doc
+      .font("Helvetica")
+      .text(`Rs. ${Number(order.deliveryFee).toFixed(2)}`, 470, position, {
+        width: 70,
+        align: "right",
+      });
+    position += 20;
+
+    doc.font("Helvetica-Bold");
+    doc.text("Grand Total:", 350, position, { width: 120, align: "right" });
+    doc
+      .fillColor("green")
+      .text(`Rs. ${Number(order.grandTotal).toFixed(2)}`, 470, position, {
+        width: 70,
+        align: "right",
+      });
+
+    // Footer
+    doc.moveDown(4);
+    doc
+      .fillColor("black")
+      .font("Helvetica-Oblique")
+      .fontSize(10)
+      .text("Thank you for shopping with LibraryMS!", { align: "center" });
+
+    // Finalize PDF file
+    doc.end();
+  } catch (error) {
+    console.error("Invoice Error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Failed to generate invoice" });
+    }
   }
 };

@@ -1,14 +1,47 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { FaBoxOpen, FaCheckCircle, FaClock } from "react-icons/fa";
+import { FaBoxOpen, FaCheckCircle, FaClock, FaDownload } from "react-icons/fa"; // <-- Added FaDownload
 import toast from "react-hot-toast";
-import { Link } from "react-router-dom"; // <-- NEW IMPORT
+import { Link, useLocation, useNavigate } from "react-router-dom"; // <-- Added useLocation, useNavigate
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // 🔥 STRIPE PAYMENT VERIFICATION ENGINE
+  useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const paymentStatus = queryParams.get("payment");
+    const orderId = queryParams.get("orderId");
+
+    if (paymentStatus === "success" && orderId) {
+      const verifyPayment = async () => {
+        try {
+          const token = sessionStorage.getItem("token");
+          await axios.post(
+            `${API_URL}/payments/verify`,
+            { orderId },
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          toast.success("🎉 Payment successful! Your order is now paid.");
+          // Clean the URL so it doesn't verify twice if they refresh
+          navigate("/orders", { replace: true });
+          fetchOrders();
+        } catch (error) {
+          toast.error("Failed to verify payment.");
+        }
+      };
+      verifyPayment();
+    } else if (paymentStatus === "cancelled") {
+      toast.error("Payment was cancelled. You can try again.");
+      navigate("/orders", { replace: true });
+    }
+  }, [location.search, navigate]);
 
   useEffect(() => {
     fetchOrders();
@@ -26,6 +59,31 @@ const Orders = () => {
       toast.error("Failed to load your orders");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 🔥 NEW: PDF INVOICE DOWNLOADER FOR CUSTOMERS
+  const handleDownloadInvoice = async (orderId) => {
+    const toastId = toast.loading("Generating your PDF...");
+    try {
+      const token = sessionStorage.getItem("token");
+      const response = await axios.get(`${API_URL}/orders/${orderId}/invoice`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob", // CRITICAL: Expecting a binary file
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `LibraryMS_Receipt_${orderId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      toast.success("Receipt downloaded!", { id: toastId });
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to download receipt", { id: toastId });
     }
   };
 
@@ -50,6 +108,9 @@ const Orders = () => {
           <p className="text-muted">
             Looks like you haven't bought any books yet!
           </p>
+          <Link to="/" className="btn btn-primary mt-3 px-4">
+            Browse Books
+          </Link>
         </div>
       ) : (
         <div className="row g-4">
@@ -64,7 +125,8 @@ const Orders = () => {
                     <strong>Placed on:</strong>{" "}
                     {new Date(order.createdAt).toLocaleDateString()}
                   </div>
-                  <div className="text-end">
+                  <div className="text-end d-flex align-items-center gap-3">
+                    {/* Status Badge */}
                     <span
                       className={`badge ${order.orderStatus === "Processing" ? "bg-warning text-dark" : "bg-success"} fs-6 px-3 py-2`}
                     >
@@ -88,7 +150,6 @@ const Orders = () => {
                           className="d-flex align-items-center mb-2"
                         >
                           <div className="ms-2">
-                            {/* ---> THIS IS NOW A CLICKABLE LINK <--- */}
                             <Link
                               to={`/books/${item.bookId}`}
                               className="text-decoration-none text-primary"
@@ -109,11 +170,22 @@ const Orders = () => {
                       ))}
                     </div>
 
-                    <div className="col-md-4 border-start mt-3 mt-md-0">
+                    <div className="col-md-4 border-start mt-3 mt-md-0 position-relative">
                       <h6 className="fw-bold mb-3">Summary:</h6>
                       <p className="mb-1 d-flex justify-content-between">
-                        <span className="text-muted">Payment Method:</span>
-                        <strong>{order.paymentMethod}</strong>
+                        <span className="text-muted">Payment:</span>
+                        <strong>
+                          {order.paymentMethod}{" "}
+                          <span
+                            className={
+                              order.paymentStatus === "Paid"
+                                ? "text-success"
+                                : "text-warning"
+                            }
+                          >
+                            ({order.paymentStatus})
+                          </span>
+                        </strong>
                       </p>
                       <p className="mb-1 d-flex justify-content-between">
                         <span className="text-muted">Delivery:</span>
@@ -122,12 +194,20 @@ const Orders = () => {
                         </strong>
                       </p>
                       <hr className="my-2" />
-                      <p className="mb-0 d-flex justify-content-between fs-5">
+                      <p className="mb-3 d-flex justify-content-between fs-5">
                         <span className="fw-bold">Total:</span>
                         <span className="fw-bold text-success">
                           Rs. {Number(order.grandTotal).toFixed(2)}
                         </span>
                       </p>
+
+                      {/* 🔥 NEW: Customer PDF Download Button */}
+                      <button
+                        onClick={() => handleDownloadInvoice(order.id)}
+                        className="btn btn-outline-secondary w-100 fw-bold shadow-sm"
+                      >
+                        <FaDownload className="me-2" /> Download Receipt
+                      </button>
                     </div>
                   </div>
                 </div>

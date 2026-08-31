@@ -21,13 +21,19 @@ const BookDetails = () => {
   const [book, setBook] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // 🔥 NEW: Recommendations State
+  const [recommendations, setRecommendations] = useState([]);
+
   // Review Form State
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Re-fetch everything when the ID in the URL changes
   useEffect(() => {
+    window.scrollTo(0, 0); // Snap back to top when navigating to a recommended book
     fetchBook();
+    fetchRecommendations();
   }, [id]);
 
   const fetchBook = async () => {
@@ -39,6 +45,18 @@ const BookDetails = () => {
       navigate("/books");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 🔥 NEW: Fetch Recommendations
+  const fetchRecommendations = async () => {
+    try {
+      const response = await axios.get(
+        `${API_URL}/books/${id}/recommendations`,
+      );
+      setRecommendations(response.data);
+    } catch (error) {
+      console.error("Failed to fetch recommendations", error);
     }
   };
 
@@ -72,7 +90,7 @@ const BookDetails = () => {
       toast.success("Review submitted successfully!");
       setComment("");
       setRating(5);
-      fetchBook(); // Refresh to show new review
+      fetchBook();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to submit review");
     } finally {
@@ -93,7 +111,6 @@ const BookDetails = () => {
       ? book.price * (1 - book.discountPercentage / 100)
       : book.price;
 
-  // Calculate Average Rating
   const avgRating =
     book.Reviews?.length > 0
       ? (
@@ -185,6 +202,66 @@ const BookDetails = () => {
           </div>
         </div>
       </div>
+
+      {/* 🔥 NEW: DISCOVERY ENGINE (Recommendations) */}
+      {recommendations.length > 0 && (
+        <div className="mb-5">
+          <h4 className="fw-bold mb-4">
+            Customers who bought this also bought...
+          </h4>
+          <div className="row g-4">
+            {recommendations.map((recBook) => (
+              <div key={recBook.id} className="col-6 col-md-3">
+                <Link
+                  to={`/books/${recBook.id}`}
+                  className="text-decoration-none text-dark"
+                >
+                  <div
+                    className="card h-100 border-0 shadow-sm"
+                    style={{ transition: "transform 0.2s" }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.transform = "translateY(-5px)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.transform = "translateY(0px)")
+                    }
+                  >
+                    <div className="p-3 bg-light text-center rounded-top">
+                      <img
+                        src={
+                          recBook.image?.startsWith("http")
+                            ? recBook.image
+                            : `${SERVER_URL}/uploads/${recBook.image}`
+                        }
+                        alt={recBook.title}
+                        className="img-fluid rounded shadow-sm"
+                        style={{ height: "180px", objectFit: "cover" }}
+                      />
+                    </div>
+                    <div className="card-body p-3">
+                      <h6 className="fw-bold text-truncate mb-1">
+                        {recBook.title}
+                      </h6>
+                      <p className="text-muted small mb-2 text-truncate">
+                        {recBook.Author?.name}
+                      </p>
+                      <p className="fw-bold text-success m-0">
+                        Rs.{" "}
+                        {recBook.discountPercentage > 0
+                          ? (
+                              recBook.price *
+                              (1 - recBook.discountPercentage / 100)
+                            ).toFixed(2)
+                          : Number(recBook.price).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* REVIEWS SECTION */}
       <h3 className="fw-bold mb-4">Customer Reviews</h3>

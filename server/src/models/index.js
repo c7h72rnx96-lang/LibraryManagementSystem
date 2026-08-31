@@ -8,6 +8,7 @@ import Order from "./Order.js";
 import OrderItem from "./OrderItem.js";
 import Review from "./Review.js";
 import Wishlist from "./Wishlist.js";
+import Coupon from "./Coupon.js";
 
 // --- BOOK RELATIONSHIPS ---
 Author.hasMany(Book, { foreignKey: "authorId" });
@@ -68,4 +69,5 @@ export {
   OrderItem,
   Review,
   Wishlist,
+  Coupon,
 };

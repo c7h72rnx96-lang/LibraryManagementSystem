@@ -20,6 +20,7 @@ import Wishlist from "./pages/Wishlist/Wishlist.jsx";
 import UserManagement from "./pages/Admin/UserManagement.jsx";
 import SellerOrders from "./pages/Orders/SellerOrders.jsx";
 import SellerWallet from "./pages/Wallet/SellerWallet.jsx";
+import BulkUpload from "./pages/Books/BulkUpload";
 function App() {
   return (
     <Routes>
@@ -46,7 +47,7 @@ function App() {
         {/* I ADDED THE PROFILE ROUTE RIGHT HERE! */}
         <Route path="profile" element={<Profile />} />
         <Route path="wallet" element={<SellerWallet />} />
-
+        <Route path="/books/bulk" element={<BulkUpload />} />
         <Route path="orders" element={<Orders />} />
         <Route path="books/add" element={<AddBook />} />
         <Route path="books/edit/:id" element={<AddBook />} />

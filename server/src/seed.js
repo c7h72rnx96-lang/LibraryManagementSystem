@@ -1,5 +1,6 @@
 import { Book, Author, Genre, User } from "./models/index.js";
 import { sequelize } from "./config/database.js";
+import { Coupon } from "./models/index.js";
 
 const seedBooksData = async () => {
   try {
@@ -18,6 +19,19 @@ const seedBooksData = async () => {
       );
       process.exit(1);
     }
+    // Inside seedBooksData, right before process.exit(0):
+    await Coupon.findOrCreate({
+      where: { code: "WELCOME10" },
+      defaults: {
+        discountType: "percentage",
+        discountValue: 10,
+        minOrderAmount: 500,
+        maxDiscountAmount: 200,
+        usageLimit: 1000,
+        isActive: true,
+      },
+    });
+    console.log("🎟️ Default Coupon seeded: WELCOME10");
 
     // 2. Define 20 Books (First 10 for Admin, Last 10 for Seller)
     const booksData = [

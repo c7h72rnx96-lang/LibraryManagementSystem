@@ -16,7 +16,8 @@ import {
   FaBars,
   FaTimes,
   FaStore,
-  FaWallet, // 🔥 ADDED FaWallet HERE
+  FaWallet,
+  FaFileCsv, // <-- 1. IMPORT FaFileCsv HERE
 } from "react-icons/fa";
 
 const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
@@ -94,7 +95,6 @@ const WorkspaceLayout = () => {
             <FaTimes size={20} />
           </button>
 
-          {/* Dynamic Icon and Title based on Role */}
           {user?.role === "seller" ? (
             <FaStore
               size={38}
@@ -232,7 +232,6 @@ const WorkspaceLayout = () => {
                     <FaTachometerAlt className="me-3 fs-5" /> Analytics
                   </Link>
                 </li>
-                {/* 🔥 NEW WALLET LINK */}
                 <li className="nav-item">
                   <Link
                     to="/wallet"
@@ -265,7 +264,8 @@ const WorkspaceLayout = () => {
                     className={linkClass("/books")}
                     style={
                       location.pathname.includes("/books") &&
-                      !location.pathname.includes("/add")
+                      !location.pathname.includes("/add") &&
+                      !location.pathname.includes("/bulk")
                         ? activeStyle
                         : {}
                     }
@@ -286,6 +286,21 @@ const WorkspaceLayout = () => {
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <FaBoxOpen className="me-3 fs-5" /> Publish New Book
+                  </Link>
+                </li>
+                {/* 🔥 2. ADDED BULK UPLOAD TO SELLER MENU */}
+                <li className="nav-item">
+                  <Link
+                    to="/books/bulk"
+                    className={linkClass("/books/bulk")}
+                    style={
+                      location.pathname.includes("/books/bulk")
+                        ? activeStyle
+                        : {}
+                    }
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <FaFileCsv className="me-3 fs-5" /> Bulk CSV Upload
                   </Link>
                 </li>
               </ul>
@@ -319,11 +334,29 @@ const WorkspaceLayout = () => {
                     to="/books"
                     className={linkClass("/books")}
                     style={
-                      location.pathname.includes("/books") ? activeStyle : {}
+                      location.pathname.includes("/books") &&
+                      !location.pathname.includes("/bulk")
+                        ? activeStyle
+                        : {}
                     }
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <FaBook className="me-3 fs-5" /> All Books
+                  </Link>
+                </li>
+                {/* 🔥 3. ADDED BULK UPLOAD TO ADMIN MENU */}
+                <li className="nav-item">
+                  <Link
+                    to="/books/bulk"
+                    className={linkClass("/books/bulk")}
+                    style={
+                      location.pathname.includes("/books/bulk")
+                        ? activeStyle
+                        : {}
+                    }
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <FaFileCsv className="me-3 fs-5" /> Bulk CSV Upload
                   </Link>
                 </li>
                 <li className="nav-item">
@@ -411,7 +444,6 @@ const WorkspaceLayout = () => {
               <FaBars size={22} />
             </button>
             <div>
-              {/* Dynamic Header Title */}
               <h5 className="m-0 fw-bold text-white d-none d-md-block">
                 {user?.role === "admin"
                   ? "Admin Portal"

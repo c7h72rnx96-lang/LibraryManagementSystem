@@ -17,6 +17,7 @@ import {
   FaStar,
   FaEdit,
   FaCheck,
+  FaPlus,
 } from "react-icons/fa";
 import {
   LineChart,
@@ -34,8 +35,6 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL;
 const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
-
-// Neon Admin Chart Colors
 const COLORS = ["#a855f7", "#ec4899", "#3b82f6", "#10b981"];
 
 const Dashboard = () => {
@@ -55,14 +54,14 @@ const Dashboard = () => {
   useEffect(() => {
     if (user?.role === "admin") {
       fetchStats();
-    } else if (user?.role === "customer") {
+    } else if (user?.role === "customer" || user?.role === "seller") {
       const savedProgress =
         JSON.parse(localStorage.getItem(`progress_${user.id}`)) || {};
       const savedPages =
         JSON.parse(localStorage.getItem(`pages_${user.id}`)) || {};
       setReadingProgress(savedProgress);
       setPageInputs(savedPages);
-      fetchCustomerData();
+      fetchCustomerData(); // Note: Sellers also see the customer view on their dashboard below their stats!
     } else {
       setLoading(false);
     }
@@ -159,13 +158,12 @@ const Dashboard = () => {
     );
 
   // =======================================
-  // ADMIN DASHBOARD UI (DARK NEON EDITION)
+  // 1. ADMIN DASHBOARD UI
   // =======================================
   if (user?.role === "admin") {
     return (
       <div className="container-fluid mt-2">
         <h2 className="fw-bold mb-4 text-gradient">Store Analytics</h2>
-
         <div className="row g-4 mb-4">
           <div className="col-md-4">
             <div
@@ -283,7 +281,6 @@ const Dashboard = () => {
                       dataKey="revenue"
                       stroke="#a855f7"
                       strokeWidth={4}
-                      name="Revenue (Rs.)"
                       activeDot={{ r: 8, fill: "#ec4899" }}
                     />
                   </LineChart>
@@ -338,46 +335,101 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
 
-        <div className="row g-4 mb-4">
+  // =======================================
+  // 2. SELLER DASHBOARD UI
+  // =======================================
+  let sellerContent = null;
+  if (user?.role === "seller") {
+    sellerContent = (
+      <div className="mb-5">
+        <div
+          className="card shadow-lg border-0 rounded-4 overflow-hidden mb-4"
+          style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+        >
+          <div className="card-body p-5 text-white">
+            <h1 className="fw-bold mb-2">
+              Welcome to your Store, {user?.storeName || user?.username}! 🏪
+            </h1>
+            <p className="fs-5 opacity-75 mb-0">
+              Manage your inventory, add new books, and watch your sales grow.
+            </p>
+          </div>
+        </div>
+
+        <div className="row g-4">
           <div className="col-md-6">
-            <div className="card shadow-sm p-3 d-flex flex-row align-items-center gap-3">
-              <div
-                className="p-3 rounded-circle"
-                style={{
-                  background: "rgba(59, 130, 246, 0.2)",
-                  color: "#3b82f6",
-                }}
+            <div
+              className="card shadow-sm h-100 p-4"
+              style={{
+                background: "rgba(15, 23, 42, 0.7)",
+                backdropFilter: "blur(20px)",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <div className="d-flex align-items-center mb-3">
+                <div
+                  className="p-3 rounded-circle me-3"
+                  style={{
+                    background: "rgba(59, 130, 246, 0.2)",
+                    color: "#3b82f6",
+                  }}
+                >
+                  <FaBoxOpen size={30} />
+                </div>
+                <div>
+                  <h5 className="text-white fw-bold mb-1">Add New Inventory</h5>
+                  <p className="text-muted small mb-0">
+                    Publish a new book to the marketplace.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate("/books/add")}
+                className="btn btn-primary w-100 fw-bold mt-auto py-2"
               >
-                <FaBook size={30} />
-              </div>
-              <div>
-                <h6 className="text-muted mb-1">Total Books in Store</h6>
-                <h3 className="fw-bold m-0 text-white">
-                  {stats?.totalBooks || 0}
-                </h3>
-              </div>
+                <FaPlus className="me-2" /> Publish New Book
+              </button>
             </div>
           </div>
+
           <div className="col-md-6">
-            <div className="card shadow-sm p-3 d-flex flex-row align-items-center gap-3">
-              <div
-                className="p-3 rounded-circle"
-                style={{
-                  background: "rgba(239, 68, 68, 0.2)",
-                  color: "#ef4444",
-                }}
+            <div
+              className="card shadow-sm h-100 p-4"
+              style={{
+                background: "rgba(15, 23, 42, 0.7)",
+                backdropFilter: "blur(20px)",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <div className="d-flex align-items-center mb-3">
+                <div
+                  className="p-3 rounded-circle me-3"
+                  style={{
+                    background: "rgba(168, 85, 247, 0.2)",
+                    color: "#a855f7",
+                  }}
+                >
+                  <FaBook size={30} />
+                </div>
+                <div>
+                  <h5 className="text-white fw-bold mb-1">
+                    Manage Store Library
+                  </h5>
+                  <p className="text-muted small mb-0">
+                    Edit prices, run discounts, or remove out-of-stock items.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate("/books")}
+                className="btn btn-outline-light w-100 fw-bold mt-auto py-2"
               >
-                <FaExclamationTriangle size={30} />
-              </div>
-              <div>
-                <h6 className="text-muted mb-1">
-                  Low Stock Items (&lt; 10 left)
-                </h6>
-                <h3 className="fw-bold m-0 text-danger">
-                  {stats?.lowStockBooks || 0}
-                </h3>
-              </div>
+                View My Books
+              </button>
             </div>
           </div>
         </div>
@@ -386,7 +438,7 @@ const Dashboard = () => {
   }
 
   // =======================================
-  // CUSTOMER DASHBOARD UI (DARK PREMIUM)
+  // 3. CUSTOMER DASHBOARD UI (Sellers see this below their panel too!)
   // =======================================
   const purchasedBooks = orders.flatMap((order) =>
     order.OrderItems.map((item) => item.Book),
@@ -429,13 +481,14 @@ const Dashboard = () => {
           @keyframes auraAnim { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
           .fire-pulse { animation: firePulse 1.5s infinite alternate; }
           @keyframes firePulse { 0% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(245, 158, 11, 0.5)); } 100% { transform: scale(1.15); filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.9)); } }
-          
-          /* NEON SLIDER */
           .slider-custom { -webkit-appearance: none; width: 100%; height: 6px; border-radius: 5px; background: rgba(255,255,255,0.1); outline: none; margin-top: 8px;}
           .slider-custom::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #a855f7; cursor: pointer; transition: 0.2s; box-shadow: 0 0 10px #a855f7;}
           .slider-custom::-webkit-slider-thumb:hover { transform: scale(1.3); box-shadow: 0 0 15px #ec4899; background: #ec4899; }
         `}
       </style>
+
+      {/* Render Seller Panel if they are a seller! */}
+      {sellerContent}
 
       {/* 🔮 DYNAMIC AURA HERO SECTION */}
       <div
@@ -468,7 +521,9 @@ const Dashboard = () => {
             className="fw-bold display-4 mb-2"
             style={{ letterSpacing: "-1px" }}
           >
-            Welcome back, {user?.username}! 👋
+            {user?.role === "seller"
+              ? "Your Reading Portal"
+              : `Welcome back, ${user?.username}! 👋`}
           </h1>
           <p className="fs-5 opacity-75 mb-0 fw-light">{aura.subtitle}</p>
         </div>
@@ -555,7 +610,6 @@ const Dashboard = () => {
                 return (
                   <div key={book.id} className="col-md-6 col-xl-4">
                     <div className="card h-100 d-flex flex-column p-0 overflow-hidden border-0">
-                      {/* Image Header */}
                       <div
                         className="position-relative"
                         style={{ height: "200px", cursor: "pointer" }}
@@ -609,7 +663,6 @@ const Dashboard = () => {
                           </button>
                         </div>
 
-                        {/* Manual Input OR Slider */}
                         {isEditingPages ? (
                           <div
                             className="p-3 rounded-3 mb-3 border border-secondary"
@@ -619,12 +672,9 @@ const Dashboard = () => {
                               <div className="col-6">
                                 <label
                                   className="text-muted fw-bold mb-1"
-                                  style={{
-                                    fontSize: "10px",
-                                    letterSpacing: "0.5px",
-                                  }}
+                                  style={{ fontSize: "10px" }}
                                 >
-                                  PAGES READ
+                                  READ
                                 </label>
                                 <input
                                   type="number"
@@ -643,12 +693,9 @@ const Dashboard = () => {
                               <div className="col-6">
                                 <label
                                   className="text-muted fw-bold mb-1"
-                                  style={{
-                                    fontSize: "10px",
-                                    letterSpacing: "0.5px",
-                                  }}
+                                  style={{ fontSize: "10px" }}
                                 >
-                                  TOTAL PAGES
+                                  TOTAL
                                 </label>
                                 <input
                                   type="number"
@@ -669,7 +716,7 @@ const Dashboard = () => {
                               onClick={() => handlePageInputSave(book.id)}
                               className="btn btn-primary btn-sm w-100 fw-bold"
                             >
-                              <FaCheck className="me-1" /> Update Progress
+                              <FaCheck className="me-1" /> Update
                             </button>
                           </div>
                         ) : (
@@ -684,18 +731,9 @@ const Dashboard = () => {
                                 handleSliderChange(book.id, e.target.value)
                               }
                             />
-                            {progress === 100 && (
-                              <div
-                                className="text-success mt-2 fw-bold text-center"
-                                style={{ fontSize: "12px" }}
-                              >
-                                <FaTrophy className="me-1" /> BOOK FINISHED!
-                              </div>
-                            )}
                           </div>
                         )}
 
-                        {/* ✨ MOTIVATION TEXT ✨ */}
                         <div
                           className="mt-auto rounded-3 p-3 text-center border"
                           style={{

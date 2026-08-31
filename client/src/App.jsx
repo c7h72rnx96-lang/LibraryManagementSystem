@@ -17,6 +17,9 @@ import AddBook from "./pages/AddBook/AddBook.jsx";
 import Profile from "./pages/Profile/Profile.jsx";
 import BookDetails from "./pages/BookDetails/BookDetails.jsx";
 import Wishlist from "./pages/Wishlist/Wishlist.jsx";
+import UserManagement from "./pages/Admin/UserManagement.jsx";
+import SellerOrders from "./pages/Orders/SellerOrders.jsx";
+import SellerWallet from "./pages/Wallet/SellerWallet.jsx";
 function App() {
   return (
     <Routes>
@@ -38,9 +41,11 @@ function App() {
         <Route path="checkout" element={<Checkout />} />
         <Route path="manage-orders" element={<AdminOrders />} />
         <Route path="manage-orders/:id" element={<OrderDetails />} />
-
+        <Route path="manage-users" element={<UserManagement />} />
+        <Route path="store-orders" element={<SellerOrders />} />
         {/* I ADDED THE PROFILE ROUTE RIGHT HERE! */}
         <Route path="profile" element={<Profile />} />
+        <Route path="wallet" element={<SellerWallet />} />
 
         <Route path="orders" element={<Orders />} />
         <Route path="books/add" element={<AddBook />} />

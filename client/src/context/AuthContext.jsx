@@ -8,7 +8,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check login when the current TAB is refreshed
   useEffect(() => {
     const storedUser = sessionStorage.getItem("user");
     const storedToken = sessionStorage.getItem("token");
@@ -17,12 +16,10 @@ export const AuthProvider = ({ children }) => {
       try {
         setUser(JSON.parse(storedUser));
       } catch (error) {
-        console.error("Invalid stored user:", error);
         sessionStorage.removeItem("user");
         sessionStorage.removeItem("token");
       }
     }
-
     setLoading(false);
   }, []);
 
@@ -33,17 +30,16 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({ email, password }),
       });
 
-      // IMPORTANT:
-      // sessionStorage = current browser TAB only
       sessionStorage.setItem("token", data.token);
       sessionStorage.setItem("user", JSON.stringify(data.user));
 
       setUser(data.user);
       toast.success("Login successful!");
-      return true;
+      return { success: true };
     } catch (error) {
-      toast.error(error.message);
-      return false;
+      // 🔥 WE REMOVED THE TOAST HERE!
+      // Now it passes the error back to the Login page silently.
+      return { success: false, error: error.message };
     }
   };
 

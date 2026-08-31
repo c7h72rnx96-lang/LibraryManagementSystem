@@ -12,4 +12,4 @@ node_modules/
 
 # Build folders
 dist/
-build/
+build/all_server.txt

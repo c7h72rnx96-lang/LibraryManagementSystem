@@ -7,13 +7,13 @@ import {
   FaTrash,
   FaBookOpen,
   FaShoppingCart,
-  FaHeart, // Added FaHeart
+  FaHeart,
 } from "react-icons/fa";
 import { AuthContext } from "../../context/AuthContext.jsx";
 import axios from "axios";
 import BookService from "../../services/BookService.js";
 import GenreService from "../../services/GenreService.js";
-import WishlistService from "../../services/WishlistService.js"; // Added WishlistService
+import WishlistService from "../../services/WishlistService.js";
 import toast from "react-hot-toast";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -30,13 +30,12 @@ const Books = () => {
 
   const [books, setBooks] = useState([]);
   const [genres, setGenres] = useState([]);
-  const [wishlistIds, setWishlistIds] = useState([]); // Track saved books
+  const [wishlistIds, setWishlistIds] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState(urlAuthor);
   const [selectedGenre, setSelectedGenre] = useState("");
 
-  // 1. FETCH GENRES ONLY ONCE ON LOAD
   useEffect(() => {
     const loadGenres = async () => {
       try {
@@ -49,7 +48,6 @@ const Books = () => {
     loadGenres();
   }, []);
 
-  // 2. FETCH WISHLIST IDS IF LOGGED IN
   useEffect(() => {
     if (user) {
       WishlistService.getWishlist()
@@ -58,7 +56,6 @@ const Books = () => {
     }
   }, [user]);
 
-  // 3. MATCH URL PARAMS
   useEffect(() => {
     setSearchTerm(urlAuthor);
   }, [urlAuthor]);
@@ -68,15 +65,12 @@ const Books = () => {
       const matchedGenre = genres.find(
         (g) => g.name.toLowerCase() === urlGenre.toLowerCase(),
       );
-      if (matchedGenre) {
-        setSelectedGenre(matchedGenre.id);
-      }
+      if (matchedGenre) setSelectedGenre(matchedGenre.id);
     } else if (!urlGenre && genres.length > 0) {
       setSelectedGenre("");
     }
   }, [urlGenre, genres]);
 
-  // 4. FETCH BOOKS EVERY TIME SEARCH OR DROPDOWN CHANGES
   useEffect(() => {
     const fetchBooks = async () => {
       setLoading(true);
@@ -120,7 +114,6 @@ const Books = () => {
     }
   };
 
-  // WISHLIST TOGGLE FUNCTION
   const handleWishlistToggle = async (bookId) => {
     if (!user) return toast.error("Please login to save books!");
     try {
@@ -139,22 +132,20 @@ const Books = () => {
 
   return (
     <div className="container-fluid">
-      {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h2 className="fw-bold">Books</h2>
           <p className="text-muted mb-0">Manage your library collection</p>
         </div>
 
-        {user?.role === "admin" && (
+        {/* 🔥 Show Add Book button to both Admin AND Seller */}
+        {(user?.role === "admin" || user?.role === "seller") && (
           <Link to="/books/add" className="btn btn-primary px-4">
-            <FaPlus className="me-2" />
-            Add Book
+            <FaPlus className="me-2" /> Add Book
           </Link>
         )}
       </div>
 
-      {/* Search and Filter */}
       <div className="card mb-4 shadow-sm border-0">
         <div className="card-body">
           <div className="row g-3">
@@ -172,7 +163,6 @@ const Books = () => {
                 />
               </div>
             </div>
-
             <div className="col-md-4">
               <select
                 className="form-select"
@@ -191,7 +181,6 @@ const Books = () => {
         </div>
       </div>
 
-      {/* Loading */}
       {loading ? (
         <div className="text-center mt-5">
           <div className="spinner-border text-primary"></div>
@@ -200,9 +189,7 @@ const Books = () => {
         <div className="row g-4">
           {books.map((book) => (
             <div key={book.id} className="col-md-6 col-lg-4">
-              {/* Added position-relative here to anchor the heart button */}
               <div className="card h-100 shadow-sm border-0 position-relative">
-                {/* FLOATING HEART BUTTON */}
                 <div
                   className="position-absolute top-0 end-0 m-2"
                   style={{ zIndex: 10 }}
@@ -229,7 +216,6 @@ const Books = () => {
                   </button>
                 </div>
 
-                {/* BOOK IMAGE */}
                 {book.image ? (
                   <img
                     src={
@@ -260,7 +246,6 @@ const Books = () => {
                   </div>
                 )}
 
-                {/* Book Details */}
                 <div className="card-body d-flex flex-column">
                   <h5
                     className="fw-bold text-primary"
@@ -273,7 +258,6 @@ const Books = () => {
                     <strong>Author:</strong> {book.Author?.name}
                   </p>
 
-                  {/* PRICE & DISCOUNT SECTION */}
                   <div className="mb-3">
                     {book.discountPercentage > 0 ? (
                       <div className="d-flex align-items-center gap-2">
@@ -314,12 +298,15 @@ const Books = () => {
                         className="btn btn-success w-100"
                         disabled={book.stock < 1}
                       >
-                        <FaShoppingCart className="me-2" />
+                        <FaShoppingCart className="me-2" />{" "}
                         {book.stock < 1 ? "Out of Stock" : "Add to Cart"}
                       </button>
                     )}
 
-                    {user?.role === "admin" && (
+                    {/* 🔥 Admin can edit ANY book. Sellers can ONLY edit their own books! */}
+                    {(user?.role === "admin" ||
+                      (user?.role === "seller" &&
+                        book.sellerId === user.id)) && (
                       <div className="d-flex gap-2">
                         <Link
                           to={`/books/edit/${book.id}`}
@@ -340,7 +327,6 @@ const Books = () => {
               </div>
             </div>
           ))}
-
           {books.length === 0 && (
             <div className="col-12 text-center py-5">
               <FaBookOpen size={60} className="text-secondary mb-3" />

@@ -11,7 +11,6 @@ const Book = sequelize.define(
     description: { type: DataTypes.TEXT, allowNull: true },
     stock: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
 
-    // --- NEW E-COMMERCE FIELDS ---
     price: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
@@ -20,12 +19,15 @@ const Book = sequelize.define(
     discountPercentage: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 0, // e.g., 20 means 20% off
+      defaultValue: 0,
     },
-    // -----------------------------
 
     authorId: { type: DataTypes.INTEGER, allowNull: false },
     genreId: { type: DataTypes.INTEGER, allowNull: false },
+
+    // --- NEW: SELLER LINK ---
+    sellerId: { type: DataTypes.INTEGER, allowNull: false },
+
     image: { type: DataTypes.STRING, allowNull: true },
   },
   {

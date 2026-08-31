@@ -1,5 +1,7 @@
+import bcrypt from "bcrypt";
 import { User } from "../models/index.js";
 import { AuthService } from "../services/authService.js";
+import { sendVerificationEmail } from "../config/mailer.js"; // <-- ADDED MAILER IMPORT
 
 export const login = async (req, res) => {
   try {
@@ -29,14 +31,11 @@ export const verify = async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 };
-// ==========================================
-// GET USER PROFILE
-// ==========================================
+
 export const getProfile = async (req, res) => {
   try {
-    // req.user comes from your authenticate middleware
     const user = await User.findByPk(req.user.id, {
-      attributes: { exclude: ["password"] }, // Never send the password back!
+      attributes: { exclude: ["password"] },
     });
 
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -48,9 +47,6 @@ export const getProfile = async (req, res) => {
   }
 };
 
-/// ==========================================
-// UPDATE USER PROFILE
-// ==========================================
 export const updateProfile = async (req, res) => {
   try {
     const { username, email, phone, address, city } = req.body;
@@ -58,21 +54,18 @@ export const updateProfile = async (req, res) => {
 
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Update text fields
     user.username = username || user.username;
     user.email = email || user.email;
     user.phone = phone || user.phone;
     user.address = address || user.address;
     user.city = city || user.city;
 
-    // Cloudinary puts the secure internet URL inside req.file.path!
     if (req.file) {
       user.avatar = req.file.path;
     }
 
     await user.save();
 
-    // Send back the updated user
     res.status(200).json({
       message: "Profile updated successfully!",
       user: {
@@ -91,9 +84,7 @@ export const updateProfile = async (req, res) => {
     res.status(500).json({ message: "Server error updating profile" });
   }
 };
-// ==========================================
-// PASSWORD MANAGEMENT CONTROLLERS
-// ==========================================
+
 export const forgotPassword = async (req, res) => {
   try {
     const result = await AuthService.forgotPassword(req.body.email);
@@ -115,7 +106,6 @@ export const resetPassword = async (req, res) => {
 
 export const changePassword = async (req, res) => {
   try {
-    // req.user.id comes from the authenticate middleware!
     const { oldPassword, newPassword } = req.body;
     const result = await AuthService.changePassword(
       req.user.id,
@@ -123,6 +113,54 @@ export const changePassword = async (req, res) => {
       newPassword,
     );
     res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// ==========================================
+// REGISTER SELLER (NOW REQUIRES EMAIL VERIFICATION)
+// ==========================================
+export const registerSeller = async (req, res) => {
+  try {
+    const { username, email, password, storeName, storeDescription } = req.body;
+
+    let user = await User.findOne({ where: { email } });
+    if (user) {
+      if (user.isVerified)
+        return res.status(400).json({ error: "Email already registered." });
+      await user.destroy(); // Wipe unverified old attempts
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const verificationCode = Math.floor(
+      100000 + Math.random() * 900000,
+    ).toString();
+    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    user = await User.create({
+      username,
+      email,
+      password: hashedPassword,
+      role: "seller",
+      storeName,
+      storeDescription,
+      isVerified: false, // 🔥 SELLER MUST NOW VERIFY EMAIL
+      verificationCode,
+      codeExpiresAt,
+      storeStatus: "pending",
+    });
+
+    console.log(
+      `\n📧 VERIFICATION CODE FOR SELLER ${email}: [ ${verificationCode} ]\n`,
+    );
+    await sendVerificationEmail(user.email, verificationCode).catch((err) =>
+      console.log("Email provider blocked sending, but code is in terminal."),
+    );
+
+    res.status(201).json({
+      message: "Verification code sent to your email.",
+    });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

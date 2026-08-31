@@ -2,7 +2,7 @@ import React, { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext.jsx";
 import { fetchAPI } from "../../utils/api.js";
-import { FaBookOpen, FaUnlockAlt, FaKey } from "react-icons/fa";
+import { FaBookOpen, FaUnlockAlt, FaKey, FaClock, FaBan } from "react-icons/fa";
 import toast from "react-hot-toast";
 
 const Login = () => {
@@ -19,8 +19,30 @@ const Login = () => {
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    const success = await login(email, password);
-    if (success) navigate("/");
+    setLoading(true);
+    const result = await login(email, password);
+    setLoading(false);
+
+    if (result && result.success) {
+      navigate("/");
+    } else {
+      const errorMsg = result?.error || "Login failed";
+
+      // 🔥 SMARTER CHECK: Looks for the word "pending" anywhere in the error!
+      if (
+        errorMsg === "PENDING_APPROVAL" ||
+        errorMsg.toLowerCase().includes("pending")
+      ) {
+        setStep("pending_approval");
+      } else if (
+        errorMsg === "REJECTED" ||
+        errorMsg.toLowerCase().includes("rejected")
+      ) {
+        setStep("rejected");
+      } else {
+        toast.error(errorMsg); // Only show red toast for wrong passwords
+      }
+    }
   };
 
   const handleForgotSubmit = async (e) => {
@@ -141,9 +163,10 @@ const Login = () => {
               </div>
               <button
                 type="submit"
+                disabled={loading}
                 className="btn btn-primary btn-lg w-100 fw-bold shadow-sm border-0 py-2"
               >
-                Sign In
+                {loading ? "Signing In..." : "Sign In"}
               </button>
               <div className="text-center mt-4">
                 <Link
@@ -161,6 +184,71 @@ const Login = () => {
               </div>
             </form>
           </>
+        )}
+
+        {/* 🔥 BEAUTIFUL PENDING SCREEN */}
+        {step === "pending_approval" && (
+          <div className="text-center py-3">
+            <FaClock
+              size={60}
+              className="mb-4"
+              style={{
+                color: "#f59e0b",
+                filter: "drop-shadow(0 0 10px rgba(245, 158, 11, 0.4))",
+              }}
+            />
+            <h3 className="fw-bold text-white mb-3">Store Under Review</h3>
+            <p
+              className="text-muted"
+              style={{ fontSize: "15px", lineHeight: "1.6" }}
+            >
+              Your seller application is currently being reviewed by our
+              administration team.
+            </p>
+            <div
+              className="p-3 my-4 rounded-3"
+              style={{
+                background: "rgba(245, 158, 11, 0.1)",
+                border: "1px solid rgba(245, 158, 11, 0.2)",
+              }}
+            >
+              <small className="text-warning fw-bold">
+                You will be able to log in and add inventory as soon as you are
+                verified!
+              </small>
+            </div>
+            <button
+              onClick={() => setStep("login")}
+              className="btn btn-outline-light w-100 fw-bold rounded-pill"
+            >
+              Return to Login
+            </button>
+          </div>
+        )}
+
+        {/* 🔥 BEAUTIFUL REJECTED SCREEN */}
+        {step === "rejected" && (
+          <div className="text-center py-3">
+            <FaBan
+              size={60}
+              className="mb-4 text-danger"
+              style={{ filter: "drop-shadow(0 0 10px rgba(239, 68, 68, 0.4))" }}
+            />
+            <h3 className="fw-bold text-white mb-3">Application Denied</h3>
+            <p
+              className="text-muted"
+              style={{ fontSize: "15px", lineHeight: "1.6" }}
+            >
+              Unfortunately, your store application was not approved by the
+              administration at this time.
+            </p>
+            <button
+              onClick={() => setStep("login")}
+              className="btn btn-outline-light mt-3 w-100 fw-bold rounded-pill"
+            >
+              Return to Login
+            </button>
+          </div>
         )}
 
         {step === "forgot" && (

@@ -60,6 +60,20 @@ export const AuthService = {
     if (!user.isVerified)
       throw new Error("Please verify your email before logging in.");
 
+    // 🔥 THE FIX: Stop pending or rejected sellers from logging in!
+    if (user.role === "seller") {
+      if (user.storeStatus === "pending") {
+        throw new Error(
+          "Your store application is currently pending Admin approval. Please check back later.",
+        );
+      }
+      if (user.storeStatus === "rejected") {
+        throw new Error(
+          "Your store application was rejected. Please contact support.",
+        );
+      }
+    }
+
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) throw new Error("Invalid email or password");
 
@@ -83,7 +97,6 @@ export const AuthService = {
       },
     };
   },
-
   // ==========================================
   // NEW: PASSWORD MANAGEMENT LOGIC
   // ==========================================

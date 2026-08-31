@@ -7,7 +7,7 @@ import CartItem from "./CartItem.js";
 import Order from "./Order.js";
 import OrderItem from "./OrderItem.js";
 import Review from "./Review.js";
-import Wishlist from "./Wishlist.js"; // <-- NEW IMPORT
+import Wishlist from "./Wishlist.js";
 
 // --- BOOK RELATIONSHIPS ---
 Author.hasMany(Book, { foreignKey: "authorId" });
@@ -49,6 +49,13 @@ Wishlist.belongsTo(User, { foreignKey: "userId" });
 
 Book.hasMany(Wishlist, { foreignKey: "bookId", onDelete: "CASCADE" });
 Wishlist.belongsTo(Book, { foreignKey: "bookId" });
+
+// --- MULTI-VENDOR / COMMISSION RELATIONSHIPS ---
+User.hasMany(Book, { foreignKey: "sellerId", as: "books" });
+Book.belongsTo(User, { foreignKey: "sellerId", as: "seller" });
+
+User.hasMany(OrderItem, { foreignKey: "sellerId" });
+OrderItem.belongsTo(User, { foreignKey: "sellerId", as: "Seller" });
 
 export {
   User,

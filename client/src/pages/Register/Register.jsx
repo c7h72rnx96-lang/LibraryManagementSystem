@@ -2,27 +2,53 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { fetchAPI } from "../../utils/api.js";
 import toast from "react-hot-toast";
-import { FaUserPlus, FaEnvelopeOpenText } from "react-icons/fa";
+import { FaUserPlus, FaEnvelopeOpenText, FaStore } from "react-icons/fa";
 
 const Register = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState("register");
   const [loading, setLoading] = useState(false);
+
+  // Toggle between Customer and Seller
+  const [accountType, setAccountType] = useState("customer");
+
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
 
+  // Seller Specific Fields
+  const [storeName, setStoreName] = useState("");
+  const [storeDescription, setStoreDescription] = useState("");
+
   const handleRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await fetchAPI("/auth/register", {
-        method: "POST",
-        body: JSON.stringify({ username, email, password }),
-      });
-      toast.success("Verification code sent to your email!");
-      setStep("verify");
+      if (accountType === "seller") {
+        // Registering as a Seller
+        await fetchAPI("/auth/register-seller", {
+          method: "POST",
+          body: JSON.stringify({
+            username,
+            email,
+            password,
+            storeName,
+            storeDescription,
+          }),
+        });
+        // 🔥 Send Sellers to the verification screen!
+        toast.success("Verification code sent to your email!");
+        setStep("verify");
+      } else {
+        // Registering as a Customer
+        await fetchAPI("/auth/register", {
+          method: "POST",
+          body: JSON.stringify({ username, email, password }),
+        });
+        toast.success("Verification code sent to your email!");
+        setStep("verify");
+      }
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -49,13 +75,13 @@ const Register = () => {
 
   return (
     <div
-      className="d-flex justify-content-center align-items-center"
+      className="d-flex justify-content-center align-items-center py-5"
       style={{ minHeight: "100vh" }}
     >
       <div
-        className="p-5 shadow-lg"
+        className="p-4 p-md-5 shadow-lg"
         style={{
-          width: "420px",
+          width: "450px",
           borderRadius: "24px",
           background: "rgba(15, 23, 42, 0.7)",
           backdropFilter: "blur(20px)",
@@ -65,28 +91,107 @@ const Register = () => {
         {step === "register" ? (
           <>
             <div className="text-center mb-4">
-              <FaUserPlus
-                size={45}
-                className="mb-3"
-                style={{
-                  color: "#3b82f6",
-                  filter: "drop-shadow(0 0 10px rgba(59, 130, 246, 0.6))",
-                }}
-              />
+              {accountType === "customer" ? (
+                <FaUserPlus
+                  size={45}
+                  className="mb-3"
+                  style={{
+                    color: "#3b82f6",
+                    filter: "drop-shadow(0 0 10px rgba(59, 130, 246, 0.6))",
+                  }}
+                />
+              ) : (
+                <FaStore
+                  size={45}
+                  className="mb-3"
+                  style={{
+                    color: "#10b981",
+                    filter: "drop-shadow(0 0 10px rgba(16, 185, 129, 0.6))",
+                  }}
+                />
+              )}
               <h3 className="fw-bold text-white">
-                Join Library<span style={{ color: "#3b82f6" }}>MS</span>
+                Join Library
+                <span
+                  style={{
+                    color: accountType === "seller" ? "#10b981" : "#3b82f6",
+                  }}
+                >
+                  MS
+                </span>
               </h3>
               <p className="text-muted" style={{ fontSize: "14px" }}>
-                Start your reading journey
+                {accountType === "seller"
+                  ? "Open your virtual bookstore"
+                  : "Start your reading journey"}
               </p>
             </div>
+
+            {/* Account Type Toggle */}
+            <div className="d-flex bg-dark rounded-pill p-1 mb-4 border border-secondary border-opacity-25">
+              <button
+                type="button"
+                className={`btn flex-fill rounded-pill fw-bold ${accountType === "customer" ? "btn-primary text-white" : "text-muted border-0"}`}
+                onClick={() => setAccountType("customer")}
+              >
+                Customer
+              </button>
+              <button
+                type="button"
+                className={`btn flex-fill rounded-pill fw-bold ${accountType === "seller" ? "btn-success text-white" : "text-muted border-0"}`}
+                onClick={() => setAccountType("seller")}
+              >
+                Seller Store
+              </button>
+            </div>
+
             <form onSubmit={handleRegister}>
+              {/* Seller Specific Fields */}
+              {accountType === "seller" && (
+                <>
+                  <div className="mb-3">
+                    <label
+                      className="form-label fw-bold text-light"
+                      style={{ fontSize: "11px", letterSpacing: "1px" }}
+                    >
+                      STORE NAME
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control form-control-lg border-0 text-white"
+                      style={{ background: "rgba(0,0,0,0.3)" }}
+                      value={storeName}
+                      onChange={(e) => setStoreName(e.target.value)}
+                      required
+                      placeholder="e.g. Aashish Book House"
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label
+                      className="form-label fw-bold text-light"
+                      style={{ fontSize: "11px", letterSpacing: "1px" }}
+                    >
+                      STORE DESCRIPTION (OPTIONAL)
+                    </label>
+                    <textarea
+                      className="form-control border-0 text-white"
+                      style={{ background: "rgba(0,0,0,0.3)", resize: "none" }}
+                      value={storeDescription}
+                      onChange={(e) => setStoreDescription(e.target.value)}
+                      placeholder="What kind of books do you sell?"
+                      rows="2"
+                    ></textarea>
+                  </div>
+                </>
+              )}
+
+              {/* Common Fields */}
               <div className="mb-3">
                 <label
                   className="form-label fw-bold text-light"
-                  style={{ fontSize: "12px", letterSpacing: "1px" }}
+                  style={{ fontSize: "11px", letterSpacing: "1px" }}
                 >
-                  USERNAME
+                  FULL NAME / OWNER NAME
                 </label>
                 <input
                   type="text"
@@ -100,7 +205,7 @@ const Register = () => {
               <div className="mb-3">
                 <label
                   className="form-label fw-bold text-light"
-                  style={{ fontSize: "12px", letterSpacing: "1px" }}
+                  style={{ fontSize: "11px", letterSpacing: "1px" }}
                 >
                   EMAIL ADDRESS
                 </label>
@@ -116,7 +221,7 @@ const Register = () => {
               <div className="mb-4">
                 <label
                   className="form-label fw-bold text-light"
-                  style={{ fontSize: "12px", letterSpacing: "1px" }}
+                  style={{ fontSize: "11px", letterSpacing: "1px" }}
                 >
                   PASSWORD
                 </label>
@@ -130,26 +235,34 @@ const Register = () => {
                   minLength="6"
                 />
               </div>
+
               <button
                 type="submit"
-                className="btn btn-primary btn-lg w-100 fw-bold border-0"
+                className={`btn btn-lg w-100 fw-bold border-0 ${accountType === "seller" ? "btn-success" : "btn-primary"}`}
                 disabled={loading}
-                style={{
-                  background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
-                }}
               >
-                {loading ? "Creating Account..." : "Sign Up Now"}
+                {loading
+                  ? "Processing..."
+                  : accountType === "seller"
+                    ? "Open Store"
+                    : "Sign Up"}
               </button>
+
               <div className="text-center mt-4">
                 <Link
                   to="/login"
                   className="text-decoration-none text-muted"
                   style={{ fontSize: "14px", transition: "0.2s" }}
-                  onMouseOver={(e) => (e.target.style.color = "#3b82f6")}
+                  onMouseOver={(e) => (e.target.style.color = "#f8fafc")}
                   onMouseOut={(e) => (e.target.style.color = "#6c757d")}
                 >
                   Already have an account?{" "}
-                  <span style={{ color: "#3b82f6", fontWeight: "600" }}>
+                  <span
+                    style={{
+                      color: accountType === "seller" ? "#10b981" : "#3b82f6",
+                      fontWeight: "600",
+                    }}
+                  >
                     Sign In
                   </span>
                 </Link>
@@ -158,6 +271,7 @@ const Register = () => {
           </>
         ) : (
           <>
+            {/* VERIFY EMAIL STEP (Unchanged) */}
             <div className="text-center mb-4">
               <FaEnvelopeOpenText
                 size={45}

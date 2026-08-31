@@ -10,17 +10,13 @@ import { sequelize } from "../config/database.js";
 import { Op } from "sequelize";
 
 // ==========================================
-// 1. CUSTOMER: CREATE A NEW ORDER
-// ==========================================
-// ==========================================
-// 1. CUSTOMER: CREATE A NEW ORDER
+// 1. CUSTOMER: CREATE A NEW ORDER (FINAL FORM)
 // ==========================================
 export const createOrder = async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
     const userId = req.user.id;
-    // We now expect an array of specific cart IDs from the frontend!
     const { fullName, phone, address, city, paymentMethod, cartItemIds } =
       req.body;
 
@@ -42,7 +38,7 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ message: "Your cart is empty" });
     }
 
-    // 🔥 FILTER THE CART: Only checkout the items the user checked the box for!
+    // Filter to only checkout selected items
     const selectedItems = cart.CartItems.filter((item) =>
       cartItemIds.includes(item.id),
     );
@@ -54,8 +50,9 @@ export const createOrder = async (req, res) => {
         .json({ message: "Selected items not found in cart" });
     }
 
-    // Validate stock and calculate totals securely
     let subtotal = 0;
+
+    // Validate stock first
     for (const item of selectedItems) {
       const book = item.Book;
       if (book.stock < item.quantity) {
@@ -76,6 +73,7 @@ export const createOrder = async (req, res) => {
     const deliveryFee = subtotal >= 1000 ? 0 : 100;
     const grandTotal = subtotal + deliveryFee;
 
+    // Create the Parent Order
     const order = await Order.create(
       {
         userId,
@@ -93,28 +91,57 @@ export const createOrder = async (req, res) => {
       { transaction },
     );
 
+    // 🔥 THE COMMISSION ENGINE & LOYALTY POINTS
+    let totalLoyaltyPointsEarned = 0;
+
     for (const item of selectedItems) {
       const book = item.Book;
+
       const effectivePrice =
         book.discountPercentage > 0
           ? Number(book.price) * (1 - book.discountPercentage / 100)
           : Number(book.price);
 
+      const itemTotal = effectivePrice * item.quantity;
+
+      // Dynamic Commission logic (Admin gets X%, Seller gets the rest)
+      const seller = await User.findByPk(book.sellerId, { transaction });
+      const commissionRate = seller ? seller.commissionRate : 10.0;
+
+      const commissionCut = itemTotal * (commissionRate / 100);
+      const sellerEarnings = itemTotal - commissionCut;
+
       await OrderItem.create(
         {
           orderId: order.id,
           bookId: book.id,
+          sellerId: book.sellerId, // Exact routing for the seller dashboard
           quantity: item.quantity,
           priceAtPurchase: effectivePrice,
+          commissionCut,
+          sellerEarnings,
+          itemStatus: "Pending",
         },
         { transaction },
       );
 
+      // Deduct stock
       book.stock -= item.quantity;
       await book.save({ transaction });
+
+      // Calculate points (1 point per Rs. 100 spent)
+      totalLoyaltyPointsEarned += Math.floor(itemTotal / 100);
     }
 
-    // 🔥 ONLY DELETE THE SELECTED ITEMS from the cart, leaving unselected items for later!
+    // Award loyalty points to the customer!
+    const customer = await User.findByPk(userId, { transaction });
+    if (customer) {
+      customer.loyaltyPoints =
+        (customer.loyaltyPoints || 0) + totalLoyaltyPointsEarned;
+      await customer.save({ transaction });
+    }
+
+    // Delete ONLY checked-out items from cart
     await CartItem.destroy({
       where: { id: { [Op.in]: cartItemIds } },
       transaction,
@@ -178,7 +205,7 @@ export const getAllOrders = async (req, res) => {
 };
 
 // ==========================================
-// 4. ADMIN: UPDATE ORDER STATUS (Shipped, etc)
+// 4. ADMIN: UPDATE ORDER STATUS & PAYOUT SELLERS
 // ==========================================
 export const updateOrderStatus = async (req, res) => {
   try {
@@ -192,14 +219,31 @@ export const updateOrderStatus = async (req, res) => {
     const order = await Order.findByPk(id);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    order.orderStatus = orderStatus;
+    // 🔥 THE PAYOUT LEDGER: If order becomes "Delivered", add money to seller wallets!
+    if (orderStatus === "Delivered" && order.orderStatus !== "Delivered") {
+      const orderItems = await OrderItem.findAll({
+        where: { orderId: order.id },
+      });
 
-    // Smart logic: If it's COD and marked Delivered, they paid the cash!
-    if (orderStatus === "Delivered" && order.paymentMethod === "COD") {
-      order.paymentStatus = "Paid";
+      for (const item of orderItems) {
+        const seller = await User.findByPk(item.sellerId);
+        if (seller) {
+          seller.walletBalance =
+            Number(seller.walletBalance) + Number(item.sellerEarnings);
+          await seller.save();
+        }
+        item.itemStatus = "Delivered"; // Mark individual item as delivered
+        await item.save();
+      }
+
+      if (order.paymentMethod === "COD") {
+        order.paymentStatus = "Paid";
+      }
     }
 
+    order.orderStatus = orderStatus;
     await order.save();
+
     res
       .status(200)
       .json({ message: "Order status updated successfully!", order });
@@ -234,7 +278,7 @@ export const getOrderDetails = async (req, res) => {
 };
 
 // ==========================================
-// 6. ADMIN: GET DASHBOARD STATS (UPGRADED WITH CHARTS)
+// 6. ADMIN: GET DASHBOARD STATS
 // ==========================================
 export const getDashboardStats = async (req, res) => {
   try {
@@ -242,7 +286,6 @@ export const getDashboardStats = async (req, res) => {
       return res.status(403).json({ message: "Not authorized. Admin only." });
     }
 
-    // 1. Basic Stats
     const totalBooks = await Book.count();
     const lowStockBooks = await Book.count({
       where: { stock: { [Op.lt]: 10 } },
@@ -255,13 +298,12 @@ export const getDashboardStats = async (req, res) => {
       where: { paymentStatus: "Paid" },
     });
 
-    // 2. Chart 1: Revenue over the last 7 days
     const salesData = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       salesData.push({
-        name: d.toLocaleDateString("en-US", { weekday: "short" }), // e.g., Mon, Tue
+        name: d.toLocaleDateString("en-US", { weekday: "short" }),
         dateString: d.toDateString(),
         revenue: 0,
         orders: 0,
@@ -285,7 +327,6 @@ export const getDashboardStats = async (req, res) => {
       }
     });
 
-    // 3. Chart 2: Order Status Distribution (Pie Chart)
     const statusDistribution = await Order.findAll({
       attributes: [
         "orderStatus",
@@ -305,21 +346,23 @@ export const getDashboardStats = async (req, res) => {
       totalOrders,
       pendingOrders,
       totalRevenue: revenue || 0,
-      salesData, // <-- NEW: Array of 7 days of revenue
-      orderStatusData, // <-- NEW: Array of order statuses
+      salesData,
+      orderStatusData,
     });
   } catch (error) {
     console.error("Stats Error:", error);
     res.status(500).json({ message: "Server error fetching stats" });
   }
 };
+
 // ==========================================
-// 7. ADMIN: TOGGLE PACKED STATUS FOR AN ITEM
+// 7. ADMIN & SELLER: TOGGLE PACKED STATUS
 // ==========================================
 export const toggleItemPackedStatus = async (req, res) => {
   try {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ message: "Not authorized. Admin only." });
+    // Both Admin and Sellers can pack items!
+    if (req.user.role !== "admin" && req.user.role !== "seller") {
+      return res.status(403).json({ message: "Not authorized." });
     }
 
     const { orderId, itemId } = req.params;
@@ -331,12 +374,105 @@ export const toggleItemPackedStatus = async (req, res) => {
 
     if (!orderItem) return res.status(404).json({ message: "Item not found" });
 
+    // Security Check: If it's a seller, they can ONLY pack their own items
+    if (req.user.role === "seller" && orderItem.sellerId !== req.user.id) {
+      return res
+        .status(403)
+        .json({ message: "You can only pack your own items." });
+    }
+
     orderItem.isPacked = isPacked;
+    if (isPacked) orderItem.itemStatus = "Packed";
+
     await orderItem.save();
 
     res.status(200).json({ message: "Item packing status updated" });
   } catch (error) {
     console.error("Toggle Pack Error:", error);
     res.status(500).json({ message: "Server error updating packing status" });
+  }
+};
+
+// ==========================================
+// 8. SELLER: GET THEIR SPECIFIC STORE ORDERS
+// ==========================================
+export const getSellerOrders = async (req, res) => {
+  try {
+    if (req.user.role !== "seller") {
+      return res.status(403).json({ message: "Not authorized. Sellers only." });
+    }
+
+    // Only fetch OrderItems that belong to THIS seller, but include Parent Order for Customer Details
+    const sellerItems = await OrderItem.findAll({
+      where: { sellerId: req.user.id },
+      include: [
+        { model: Book, attributes: ["title", "image", "price"] },
+        {
+          model: Order,
+          attributes: [
+            "id",
+            "orderStatus",
+            "paymentStatus",
+            "fullName",
+            "address",
+            "city",
+            "phone",
+            "createdAt",
+          ],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    res.status(200).json(sellerItems);
+  } catch (error) {
+    console.error("Seller Orders Error:", error);
+    res.status(500).json({ message: "Server error fetching seller orders" });
+  }
+};
+// ==========================================
+// 9. SELLER: GET WALLET & EARNINGS STATS
+// ==========================================
+export const getSellerWalletStats = async (req, res) => {
+  try {
+    if (req.user.role !== "seller") {
+      return res.status(403).json({ message: "Not authorized. Sellers only." });
+    }
+
+    const sellerId = req.user.id;
+
+    // Fetch the seller to get their current actual wallet balance
+    const seller = await User.findByPk(sellerId);
+
+    // Get all items sold by this seller
+    const allItems = await OrderItem.findAll({
+      where: { sellerId },
+    });
+
+    // Calculate Lifetime Earnings (Only from Delivered Items)
+    const lifetimeEarnings = allItems
+      .filter((item) => item.itemStatus === "Delivered")
+      .reduce((sum, item) => sum + Number(item.sellerEarnings), 0);
+
+    // Calculate Platform Fees Paid (Only from Delivered Items)
+    const lifetimeCommission = allItems
+      .filter((item) => item.itemStatus === "Delivered")
+      .reduce((sum, item) => sum + Number(item.commissionCut), 0);
+
+    // Calculate Pending Value (Orders placed but not yet delivered)
+    const pendingValue = allItems
+      .filter((item) => item.itemStatus !== "Delivered")
+      .reduce((sum, item) => sum + Number(item.sellerEarnings), 0);
+
+    res.status(200).json({
+      currentBalance: Number(seller.walletBalance) || 0,
+      lifetimeEarnings,
+      lifetimeCommission,
+      pendingValue,
+      commissionRate: seller.commissionRate,
+    });
+  } catch (error) {
+    console.error("Wallet Stats Error:", error);
+    res.status(500).json({ message: "Server error fetching wallet stats" });
   }
 };

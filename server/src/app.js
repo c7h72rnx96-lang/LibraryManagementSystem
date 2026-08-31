@@ -9,6 +9,7 @@ import dashboardRoutes from "./routes/dashboardRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js"; // <-- NEW IMPORT
+import adminRoutes from "./routes/adminRoutes.js";
 
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 
@@ -42,7 +43,8 @@ app.use("/api/authors", authorRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
-app.use("/api/wishlist", wishlistRoutes); // <-- MOUNTED ROUTE
+app.use("/api/wishlist", wishlistRoutes);
+app.use("/api/admin", adminRoutes); // <-- MOUNTED ROUTE
 
 app.use(notFoundHandler);
 app.use(errorHandler);

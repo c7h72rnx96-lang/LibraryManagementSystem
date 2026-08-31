@@ -6,25 +6,38 @@ import {
   updateOrderStatus,
   getOrderDetails,
   getDashboardStats,
-  toggleItemPackedStatus, // <-- NEW IMPORT
+  toggleItemPackedStatus,
+  getSellerOrders,
+  getSellerWalletStats, // <-- ADDED THIS IMPORT
 } from "../controllers/orderController.js";
-import { authenticate } from "../middleware/auth.js";
+import { authenticate, authorize } from "../middleware/auth.js";
 
 const router = Router();
+
 // Customer routes
 router.post("/", authenticate, createOrder);
 router.get("/", authenticate, getUserOrders);
 
 // Admin routes
-router.get("/all", authenticate, getAllOrders);
-router.get("/admin/stats", authenticate, getDashboardStats);
-router.put("/:id/status", authenticate, updateOrderStatus);
-router.get("/admin/:id", authenticate, getOrderDetails);
+router.get("/all", authenticate, authorize("admin"), getAllOrders);
+router.get("/admin/stats", authenticate, authorize("admin"), getDashboardStats);
+router.put("/:id/status", authenticate, authorize("admin"), updateOrderStatus);
+router.get("/admin/:id", authenticate, authorize("admin"), getOrderDetails);
 
-// NEW ROUTE: Checkbox saving
+// Seller routes
+router.get("/seller", authenticate, authorize("seller"), getSellerOrders);
+router.get(
+  "/seller/wallet",
+  authenticate,
+  authorize("seller"),
+  getSellerWalletStats,
+); // <-- ADDED THIS ROUTE
+
+// Shared Admin/Seller route
 router.put(
   "/admin/:orderId/items/:itemId/pack",
   authenticate,
+  authorize("admin", "seller"),
   toggleItemPackedStatus,
 );
 

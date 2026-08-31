@@ -6,10 +6,9 @@ import {
   createBook,
   updateBook,
   deleteBook,
-  addReview, // <-- 1. ADD THIS IMPORT
+  addReview,
 } from "../controllers/bookController.js";
-import { authenticate } from "../middleware/auth.js";
-import { requireAdmin } from "../middleware/roleAuth.js";
+import { authenticate, authorize } from "../middleware/auth.js"; // <-- Combined these!
 
 const router = Router();
 
@@ -18,23 +17,25 @@ router.get("/", getAllBooks);
 router.get("/:id", getBookById);
 
 // Logged-in users can leave reviews
-router.post("/:id/reviews", authenticate, addReview); // <-- 2. ADD THIS ROUTE
+router.post("/:id/reviews", authenticate, addReview); // <-- DON'T FORGET THIS ROUTE!
 
-// ONLY Admins can add/edit/delete books
+// ONLY Admins and Sellers can add/edit/delete books
 router.post(
   "/",
   authenticate,
-  requireAdmin,
+  authorize("admin", "seller"),
   upload.single("image"),
   createBook,
 );
+
 router.put(
   "/:id",
   authenticate,
-  requireAdmin,
+  authorize("admin", "seller"),
   upload.single("image"),
   updateBook,
 );
-router.delete("/:id", authenticate, requireAdmin, deleteBook);
+
+router.delete("/:id", authenticate, authorize("admin", "seller"), deleteBook);
 
 export default router;

@@ -16,6 +16,7 @@ import {
 import { validate } from "../middleware/validate.js";
 import { authenticate } from "../middleware/auth.js";
 import upload from "../config/multer.js";
+import { registerSeller } from "../controllers/authController.js";
 
 const router = Router();
 
@@ -32,5 +33,6 @@ router.post("/reset-password", resetPassword);
 router.get("/profile", authenticate, getProfile);
 router.put("/profile", authenticate, upload.single("avatar"), updateProfile);
 router.put("/change-password", authenticate, changePassword); // <-- NEW
+router.post("/register-seller", registerSeller);
 
 export default router;

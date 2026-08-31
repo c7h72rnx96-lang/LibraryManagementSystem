@@ -11,7 +11,7 @@ const startServer = async () => {
     // This rebuilds the tables with the correct rules
     await sequelize.sync({ alter: true });
 
-    console.log("✅ Database Connected & Carts Fixed!");
+    console.log("✅ Database Connected ");
 
     app.listen(config.port, "0.0.0.0", () => {
       console.log(`🚀 Server running at http://localhost:${config.port}`);

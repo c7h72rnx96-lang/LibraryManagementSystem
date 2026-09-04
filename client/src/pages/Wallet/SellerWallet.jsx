@@ -7,6 +7,7 @@ import {
   FaPercentage,
   FaChartLine,
   FaCheckCircle,
+  FaFileInvoiceDollar,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -29,7 +30,6 @@ const SellerWallet = () => {
       });
       setStats(response.data);
     } catch (error) {
-      console.error(error);
       toast.error("Failed to load wallet data");
     } finally {
       setLoading(false);
@@ -41,20 +41,18 @@ const SellerWallet = () => {
       return toast.error("Minimum withdrawal amount is Rs. 500");
     }
     setRequesting(true);
-    // Mocking an API delay for the payout request
     setTimeout(() => {
       toast.success("Payout request sent to Admin successfully!");
       setRequesting(false);
     }, 1500);
   };
 
-  if (loading) {
+  if (loading)
     return (
       <div className="text-center mt-5">
         <div className="spinner-border text-success"></div>
       </div>
     );
-  }
 
   return (
     <div className="container-fluid mt-2 mb-5">
@@ -185,6 +183,59 @@ const SellerWallet = () => {
               Total commission the platform has collected from your sales.
             </small>
           </div>
+        </div>
+      </div>
+
+      {/* SELLER PAYOUT STATEMENT LEDGER */}
+      <h4 className="fw-bold mt-5 mb-4 text-white d-flex align-items-center">
+        <FaFileInvoiceDollar className="me-3 text-info" /> Payout Statement
+      </h4>
+      <div
+        className="card shadow-sm border-0 rounded-4 overflow-hidden"
+        style={{ background: "rgba(15, 23, 42, 0.7)" }}
+      >
+        <div className="table-responsive">
+          <table className="table table-dark table-hover align-middle m-0">
+            <thead style={{ background: "rgba(255,255,255,0.05)" }}>
+              <tr>
+                <th className="py-3 px-4 border-0">Date Processed</th>
+                <th className="py-3 px-4 border-0">Transaction ID</th>
+                <th className="py-3 px-4 border-0">Amount Received</th>
+                <th className="py-3 px-4 border-0 text-end">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats?.payoutHistory?.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="text-center py-5 text-muted">
+                    No payouts received yet. Your statements will appear here.
+                  </td>
+                </tr>
+              ) : (
+                stats?.payoutHistory?.map((payout) => (
+                  <tr
+                    key={payout.id}
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+                  >
+                    <td className="py-3 px-4 border-0 text-muted">
+                      {new Date(payout.createdAt).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4 border-0 text-muted font-monospace">
+                      TXN-{payout.id}000
+                    </td>
+                    <td className="py-3 px-4 border-0 fw-bold text-success fs-5">
+                      Rs. {Number(payout.amount).toFixed(2)}
+                    </td>
+                    <td className="py-3 px-4 border-0 text-end">
+                      <span className="badge bg-success rounded-pill px-3 py-2">
+                        <FaCheckCircle className="me-1" /> {payout.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

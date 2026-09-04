@@ -11,6 +11,7 @@ import {
   FaBoxOpen,
   FaBars,
   FaTimes,
+  FaHeadset, // <-- Added Headset icon
 } from "react-icons/fa";
 
 const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
@@ -128,10 +129,18 @@ const StorefrontLayout = () => {
               </Link>
               <Link
                 to="/orders"
-                className="btn btn-link text-light position-relative p-0 hover-glow ms-2 me-3"
+                className="btn btn-link text-light position-relative p-0 hover-glow ms-2"
                 title="My Orders"
               >
                 <FaBoxOpen size={22} />
+              </Link>
+              {/* 🔥 NEW: Help Center Icon */}
+              <Link
+                to="/support"
+                className="btn btn-link text-info position-relative p-0 hover-glow ms-2 me-3"
+                title="Help Center"
+              >
+                <FaHeadset size={24} />
               </Link>
 
               {user ? (

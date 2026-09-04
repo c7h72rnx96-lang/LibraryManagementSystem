@@ -1,9 +1,9 @@
+// === src/controllers/paymentController.js ===
 import Stripe from "stripe";
-import { Order } from "../models/index.js";
+import { Order, OrderItem, User } from "../models/index.js";
 
-// Note: In production, this goes in your .env file!
-// For now, use this free Stripe Test Key to simulate real transactions.
-const stripe = new Stripe("sk_test_51O1...your_test_key_here...");
+// Initialize Stripe (In production, load this from process.env)
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_12345");
 
 export const createCheckoutSession = async (req, res) => {
   try {
@@ -14,8 +14,23 @@ export const createCheckoutSession = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // Stripe expects amounts in cents (e.g., $10.00 = 1000)
-    // Since you are using Rs., we multiply by 100 to meet Stripe's formatting
+    // 🔥 DEVELOPER BYPASS: If no real Stripe Key is set in .env, simulate a successful payment!
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.log(
+        "⚠️ No real Stripe key found. Simulating successful payment redirect.",
+      );
+
+      // Manually update order since the Stripe Webhook won't fire in test mode
+      order.paymentStatus = "Paid";
+      order.orderStatus = "Processing";
+      await order.save();
+
+      return res.status(200).json({
+        url: `${process.env.FRONTEND_URL || "http://localhost:5173"}/orders?payment=success&orderId=${order.id}`,
+      });
+    }
+
+    // --- REAL STRIPE LOGIC (Only runs if you add a key to .env later) ---
     const amountInCents = Math.round(Number(order.grandTotal) * 100);
 
     const session = await stripe.checkout.sessions.create({
@@ -24,7 +39,7 @@ export const createCheckoutSession = async (req, res) => {
       line_items: [
         {
           price_data: {
-            currency: "inr", // Use 'inr' or 'usd' depending on your Stripe account region
+            currency: "inr",
             product_data: {
               name: `LibraryMS Order #${order.id}`,
               description: `Payment for ${order.fullName}'s book order.`,
@@ -34,11 +49,11 @@ export const createCheckoutSession = async (req, res) => {
           quantity: 1,
         },
       ],
-      // We will create these success/cancel pages in React next
-      // UPDATE THIS LINE:
+      metadata: {
+        orderId: order.id.toString(),
+      },
       success_url: `${process.env.FRONTEND_URL || "http://localhost:5173"}/orders?payment=success&orderId=${order.id}`,
       cancel_url: `${process.env.FRONTEND_URL || "http://localhost:5173"}/checkout?payment=cancelled`,
-      client_reference_id: order.id.toString(),
     });
 
     res.status(200).json({ url: session.url });
@@ -47,23 +62,38 @@ export const createCheckoutSession = async (req, res) => {
     res.status(500).json({ message: "Failed to initialize payment gateway" });
   }
 };
-export const verifyPayment = async (req, res) => {
+
+export const stripeWebhook = async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  let event;
+
   try {
-    const { orderId } = req.body;
-
-    // Find the order in our database
-    const order = await Order.findByPk(orderId);
-    if (!order) return res.status(404).json({ message: "Order not found" });
-
-    // In a real production app, we would use Stripe Webhooks here.
-    // For this build, we are simulating a successful capture from the frontend return URL.
-    order.paymentStatus = "Paid";
-    order.orderStatus = "Processing";
-    await order.save();
-
-    res.status(200).json({ message: "Payment verified successfully", order });
-  } catch (error) {
-    console.error("Payment Verification Error:", error);
-    res.status(500).json({ message: "Failed to verify payment" });
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+  } catch (err) {
+    console.error(`⚠️ Webhook signature verification failed: ${err.message}`);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
   }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const orderId = session.metadata.orderId;
+
+    try {
+      const order = await Order.findByPk(orderId);
+      if (order && order.paymentStatus !== "Paid") {
+        order.paymentStatus = "Paid";
+        order.orderStatus = "Processing";
+        await order.save();
+        console.log(
+          `✅ Order #${order.id} securely marked as Paid via Webhook.`,
+        );
+      }
+    } catch (error) {
+      console.error("Error updating order from webhook:", error);
+    }
+  }
+
+  res.json({ received: true });
 };

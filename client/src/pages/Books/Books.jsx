@@ -38,8 +38,8 @@ const Books = () => {
   const [searchTerm, setSearchTerm] = useState(urlAuthor);
   const [selectedGenre, setSelectedGenre] = useState("");
 
-  // 🔥 NEW: Bulk Selection State
   const [selectedBooks, setSelectedBooks] = useState([]);
+  const [addingId, setAddingId] = useState(null);
 
   useEffect(() => {
     const loadGenres = async () => {
@@ -132,7 +132,7 @@ const Books = () => {
     }
   };
 
-  // 🔥 NEW: Execute Bulk Delete
+  // Execute Bulk Delete
   const handleBulkDelete = async () => {
     if (
       !window.confirm(
@@ -155,6 +155,7 @@ const Books = () => {
   };
 
   const handleAddToCart = async (bookId) => {
+    setAddingId(bookId);
     try {
       const token = sessionStorage.getItem("token");
       await axios.post(
@@ -166,6 +167,8 @@ const Books = () => {
     } catch (error) {
       console.error(error);
       toast.error("Failed to add to cart. Please log in.");
+    } finally {
+      setAddingId(null);
     }
   };
 
@@ -194,7 +197,7 @@ const Books = () => {
         </div>
 
         <div className="d-flex gap-2">
-          {/* 🔥 Show Bulk Delete button when items are selected */}
+          {/* Show Bulk Delete button when items are selected */}
           {selectedBooks.length > 0 && (
             <button
               onClick={handleBulkDelete}
@@ -219,7 +222,7 @@ const Books = () => {
       <div className="card mb-4 shadow-sm border-0">
         <div className="card-body">
           <div className="row g-3 align-items-center">
-            {/* 🔥 NEW: Select All Checkbox for Admins/Sellers */}
+            {/* Select All Checkbox for Admins/Sellers */}
             {(user?.role === "admin" || user?.role === "seller") &&
               manageableBooks.length > 0 && (
                 <div className="col-auto ps-3 pe-0">
@@ -288,16 +291,26 @@ const Books = () => {
                     className="position-absolute top-0 w-100 d-flex justify-content-between p-2"
                     style={{ zIndex: 10 }}
                   >
-                    {/* LEFT CORNER: SELECT CHECKBOX */}
-                    <div>
+                    {/* LEFT CORNER: SELECT CHECKBOX & YOUR LISTING BADGE */}
+                    <div className="d-flex align-items-center">
                       {isManageable && (
-                        <input
-                          type="checkbox"
-                          className="form-check-input ms-1 shadow-sm"
-                          style={{ transform: "scale(1.5)", cursor: "pointer" }}
-                          checked={isSelected}
-                          onChange={() => toggleSelection(book.id)}
-                        />
+                        <>
+                          <input
+                            type="checkbox"
+                            className="form-check-input ms-1 shadow-sm"
+                            style={{
+                              transform: "scale(1.5)",
+                              cursor: "pointer",
+                            }}
+                            checked={isSelected}
+                            onChange={() => toggleSelection(book.id)}
+                          />
+                          {user?.role === "seller" && (
+                            <span className="badge bg-info text-dark fw-bold ms-2 shadow-sm">
+                              Your Listing
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                     {/* RIGHT CORNER: WISHLIST ICON */}
@@ -324,35 +337,40 @@ const Books = () => {
                   </div>
 
                   {/* COVER IMAGE */}
-                  {book.image ? (
-                    <img
-                      src={
-                        book.image.startsWith("http")
-                          ? book.image
-                          : `${SERVER_URL}/uploads/${book.image}`
-                      }
-                      alt={book.title}
-                      className="card-img-top"
-                      style={{
-                        height: "240px",
-                        objectFit: "cover",
-                        cursor: "pointer",
-                      }}
-                      onClick={() => navigate(`/books/${book.id}`)}
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = `https://placehold.co/400x600/1e293b/ffffff?text=No+Cover`;
-                      }}
-                    />
-                  ) : (
-                    <div
-                      className="d-flex justify-content-center align-items-center bg-light"
-                      style={{ height: "240px", cursor: "pointer" }}
-                      onClick={() => navigate(`/books/${book.id}`)}
-                    >
-                      <FaBookOpen size={50} color="#999" />
-                    </div>
-                  )}
+                  <div
+                    className="w-100 d-flex justify-content-center align-items-center p-3"
+                    style={{
+                      height: "280px",
+                      background: "rgba(0,0,0,0.2)",
+                      cursor: "pointer",
+                      borderTopLeftRadius: "var(--bs-border-radius)",
+                      borderTopRightRadius: "var(--bs-border-radius)",
+                    }}
+                    onClick={() => navigate(`/books/${book.id}`)}
+                  >
+                    {book.image ? (
+                      <img
+                        src={
+                          book.image.startsWith("http")
+                            ? book.image
+                            : `${SERVER_URL}/uploads/${book.image}`
+                        }
+                        alt={book.title}
+                        className="shadow-lg rounded"
+                        style={{
+                          maxHeight: "100%",
+                          maxWidth: "100%",
+                          objectFit: "contain",
+                        }}
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = `https://placehold.co/400x600/1e293b/ffffff?text=No+Cover`;
+                        }}
+                      />
+                    ) : (
+                      <FaBookOpen size={50} color="#64748b" />
+                    )}
+                  </div>
 
                   {/* DETAILS */}
                   <div className="card-body d-flex flex-column">
@@ -401,34 +419,44 @@ const Books = () => {
                       </span>
                     </p>
 
+                    {/* ACTION BUTTONS: CONDITIONAL SELLER VS BUYER VIEW */}
                     <div className="mt-auto d-flex flex-column gap-2">
-                      {user && (
-                        <button
-                          onClick={() => handleAddToCart(book.id)}
-                          className="btn btn-success w-100 fw-bold"
-                          disabled={book.stock < 1}
-                        >
-                          <FaShoppingCart className="me-2" />{" "}
-                          {book.stock < 1 ? "Out of Stock" : "Add to Cart"}
-                        </button>
-                      )}
-
-                      {/* EDIT/DELETE ACTIONS */}
-                      {isManageable && (
+                      {isManageable ? (
+                        // 🏪 YOUR BOOK: Management Controls Only
                         <div className="d-flex gap-2">
                           <Link
                             to={`/books/edit/${book.id}`}
-                            className="btn btn-primary flex-fill"
+                            className="btn btn-primary flex-fill fw-bold py-2 shadow-sm d-flex justify-content-center align-items-center"
                           >
                             <FaEdit className="me-1" /> Edit
                           </Link>
                           <button
                             onClick={() => handleDelete(book.id)}
-                            className="btn btn-danger flex-fill"
+                            className="btn btn-danger flex-fill fw-bold py-2 shadow-sm d-flex justify-content-center align-items-center"
                           >
                             <FaTrash className="me-1" /> Delete
                           </button>
                         </div>
+                      ) : (
+                        // 🛒 OTHER STORE'S BOOK: Add to Cart Option
+                        user && (
+                          <button
+                            onClick={() => handleAddToCart(book.id)}
+                            className="btn btn-success w-100 fw-bold d-flex justify-content-center align-items-center py-2 shadow-sm"
+                            disabled={book.stock < 1 || addingId === book.id}
+                          >
+                            {addingId === book.id ? (
+                              <div className="spinner-border spinner-border-sm me-2"></div>
+                            ) : (
+                              <FaShoppingCart className="me-2" />
+                            )}
+                            {book.stock < 1
+                              ? "Out of Stock"
+                              : addingId === book.id
+                                ? "Adding..."
+                                : "Add to Cart"}
+                          </button>
+                        )
                       )}
                     </div>
                   </div>

@@ -1,12 +1,12 @@
+// === src/config/mailer.js ===
 import { Resend } from "resend";
 
 export const sendVerificationEmail = async (email, code) => {
   const resend = new Resend(process.env.RESEND_API_KEY);
-
   try {
-    const data = await resend.emails.send({
-      from: "Library <noreply@aashish7.me>",
-      to: email, // ⚠️ FREE TIER RULE: You can ONLY send to your own email address for now!
+    await resend.emails.send({
+      from: "LibraryMS <noreply@aashish7.me>",
+      to: email,
       subject: "Library Account Verification Code",
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px;">
@@ -17,20 +17,16 @@ export const sendVerificationEmail = async (email, code) => {
         </div>
       `,
     });
-    console.log("Email sent:", data);
   } catch (error) {
     console.error("Failed to send email:", error);
-    throw new Error("Could not send verification email.");
   }
 };
-// ==========================================
-// SEND PASSWORD RESET EMAIL
-// ==========================================
+
 export const sendPasswordResetEmail = async (email, code) => {
   const resend = new Resend(process.env.RESEND_API_KEY);
   try {
-    const data = await resend.emails.send({
-      from: "Library <noreply@aashish7.me>",
+    await resend.emails.send({
+      from: "LibraryMS <noreply@aashish7.me>",
       to: email,
       subject: "Library Password Reset Code",
       html: `
@@ -42,9 +38,60 @@ export const sendPasswordResetEmail = async (email, code) => {
         </div>
       `,
     });
-    console.log("Reset email sent:", data);
   } catch (error) {
     console.error("Failed to send reset email:", error);
-    throw new Error("Could not send reset email.");
+  }
+};
+
+// 🔥 NEW: ABANDONED CART RECOVERY EMAIL
+export const sendAbandonedCartEmail = async (email, username, itemCount) => {
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  try {
+    await resend.emails.send({
+      from: "LibraryMS <noreply@aashish7.me>",
+      to: email,
+      subject: "You left something behind! 🛒",
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
+          <h2>Hi ${username},</h2>
+          <p>We noticed you left <strong>${itemCount} item(s)</strong> in your shopping cart.</p>
+          <p>Popular books sell out fast! Complete your purchase today before they are gone.</p>
+          <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/cart" style="display: inline-block; background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 15px;">
+            Return to Checkout
+          </a>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error("Failed to send abandoned cart email:", error);
+  }
+};
+
+// 🔥 NEW: REVIEW NUDGE EMAIL
+export const sendReviewNudgeEmail = async (
+  email,
+  username,
+  bookTitle,
+  bookId,
+) => {
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  try {
+    await resend.emails.send({
+      from: "LibraryMS <noreply@aashish7.me>",
+      to: email,
+      subject: `What did you think of ${bookTitle}? 🌟`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
+          <h2>Hi ${username},</h2>
+          <p>We hope you are enjoying <strong>${bookTitle}</strong>!</p>
+          <p>Your opinion helps other readers discover great books. Take 60 seconds to leave a review and earn loyalty points.</p>
+          <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/books/${bookId}" style="display: inline-block; background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 15px;">
+            Rate this Book
+          </a>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error("Failed to send review nudge:", error);
   }
 };

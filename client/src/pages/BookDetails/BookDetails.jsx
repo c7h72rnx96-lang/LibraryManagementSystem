@@ -1,3 +1,4 @@
+// === src/pages/BookDetails/BookDetails.jsx ===
 import React, { useState, useEffect, useContext } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import axios from "axios";
@@ -6,6 +7,11 @@ import {
   FaShoppingCart,
   FaArrowLeft,
   FaUserCircle,
+  FaStore,
+  FaCheckCircle,
+  FaBolt,
+  FaEdit,
+  FaTrash, // <-- Added for Delete button
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import { AuthContext } from "../../context/AuthContext.jsx";
@@ -20,18 +26,13 @@ const BookDetails = () => {
 
   const [book, setBook] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // 🔥 NEW: Recommendations State
   const [recommendations, setRecommendations] = useState([]);
-
-  // Review Form State
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Re-fetch everything when the ID in the URL changes
   useEffect(() => {
-    window.scrollTo(0, 0); // Snap back to top when navigating to a recommended book
+    window.scrollTo(0, 0);
     fetchBook();
     fetchRecommendations();
   }, [id]);
@@ -48,7 +49,6 @@ const BookDetails = () => {
     }
   };
 
-  // 🔥 NEW: Fetch Recommendations
   const fetchRecommendations = async () => {
     try {
       const response = await axios.get(
@@ -61,7 +61,10 @@ const BookDetails = () => {
   };
 
   const handleAddToCart = async () => {
-    if (!user) return toast.error("Please login to add to cart");
+    if (!user) {
+      toast.error("Please login to add to cart");
+      return navigate("/login");
+    }
     try {
       const token = sessionStorage.getItem("token");
       await axios.post(
@@ -72,6 +75,78 @@ const BookDetails = () => {
       toast.success("Added to cart!");
     } catch (error) {
       toast.error("Failed to add to cart.");
+    }
+  };
+
+  const handleBuyNow = async () => {
+    if (!user) {
+      toast.error("Please login to purchase");
+      return navigate("/login");
+    }
+
+    const toastId = toast.loading("Preparing secure checkout...");
+    try {
+      const token = sessionStorage.getItem("token");
+
+      // 1. Silently add to cart
+      await axios.post(
+        `${API_URL}/cart/add`,
+        { bookId: book.id },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      // 2. Fetch the cart to get the specific cart item ID
+      const cartRes = await axios.get(`${API_URL}/cart`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const cartItems = cartRes.data.CartItems || [];
+      const specificCartItem = cartItems.find(
+        (item) => item.bookId === book.id,
+      );
+
+      if (specificCartItem) {
+        toast.dismiss(toastId);
+
+        const effectivePrice =
+          book.discountPercentage > 0
+            ? book.price * (1 - book.discountPercentage / 100)
+            : book.price;
+
+        const subtotal = effectivePrice * specificCartItem.quantity;
+
+        // 3. Teleport straight to checkout with ONLY this item
+        navigate("/checkout", {
+          state: {
+            selectedCartItemIds: [specificCartItem.id],
+            cartSubtotal: subtotal,
+          },
+        });
+      } else {
+        toast.dismiss(toastId);
+        navigate("/cart");
+      }
+    } catch (error) {
+      toast.dismiss(toastId);
+      toast.error("Failed to process Buy Now.");
+    }
+  };
+
+  // 🔥 NEW: Delete Logic for Admins & Owners
+  const handleDelete = async () => {
+    if (
+      !window.confirm("Are you sure you want to permanently delete this book?")
+    )
+      return;
+    try {
+      const token = sessionStorage.getItem("token");
+      await axios.delete(`${API_URL}/books/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success("Book deleted successfully!");
+      navigate("/books");
+    } catch (error) {
+      toast.error("Failed to delete book.");
     }
   };
 
@@ -119,6 +194,9 @@ const BookDetails = () => {
         ).toFixed(1)
       : 0;
 
+  // Determine if the user is the Owner OR an Admin
+  const isManageable = user?.role === "admin" || user?.id === book.sellerId;
+
   return (
     <div className="container-fluid mt-2 max-w-75 mb-5">
       <button
@@ -128,82 +206,197 @@ const BookDetails = () => {
         <FaArrowLeft className="me-2" /> Back to Books
       </button>
 
-      <div className="card shadow-sm border-0 mb-5">
-        <div className="row g-0">
-          <div className="col-md-4 p-4 text-center bg-light rounded-start">
-            <img
-              src={
-                book.image?.startsWith("http")
-                  ? book.image
-                  : `${SERVER_URL}/uploads/${book.image}`
-              }
-              alt={book.title}
-              className="img-fluid rounded shadow"
-              style={{ maxHeight: "400px", objectFit: "cover" }}
-            />
-          </div>
-          <div className="col-md-8 p-4 d-flex flex-column">
-            <h2 className="fw-bold mb-1">{book.title}</h2>
-            <h5 className="text-muted mb-3">By {book.Author?.name}</h5>
-
-            <div className="d-flex align-items-center gap-3 mb-3">
-              <span className="badge bg-secondary fs-6">
-                {book.Genre?.name}
-              </span>
-              <div className="d-flex align-items-center text-warning fs-5">
-                <FaStar className="me-1" />
-                <span className="text-dark fw-bold">{avgRating}</span>
-                <span className="text-muted ms-1 fs-6">
-                  ({book.Reviews?.length || 0} reviews)
-                </span>
+      <div className="row g-4 mb-5">
+        <div className="col-lg-8">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="row g-0 h-100">
+              <div className="col-md-5 p-4 text-center bg-light rounded-start d-flex align-items-center justify-content-center">
+                <img
+                  src={
+                    book.image?.startsWith("http")
+                      ? book.image
+                      : `${SERVER_URL}/uploads/${book.image}`
+                  }
+                  alt={book.title}
+                  className="img-fluid rounded shadow"
+                  style={{ maxHeight: "400px", objectFit: "cover" }}
+                />
               </div>
-            </div>
+              <div className="col-md-7 p-4 d-flex flex-column">
+                <h2 className="fw-bold mb-1">{book.title}</h2>
+                <h5 className="text-muted mb-3">By {book.Author?.name}</h5>
 
-            <p className="text-muted" style={{ lineHeight: "1.8" }}>
-              {book.description || "No description available for this book."}
-            </p>
-
-            <div className="mt-auto pt-4 border-top">
-              <div className="d-flex align-items-center justify-content-between">
-                <div>
-                  {book.discountPercentage > 0 ? (
-                    <div className="d-flex align-items-end gap-2">
-                      <h3 className="fw-bold text-success m-0">
-                        Rs. {itemPrice.toFixed(2)}
-                      </h3>
-                      <span className="text-decoration-line-through text-muted mb-1">
-                        Rs. {Number(book.price).toFixed(2)}
-                      </span>
-                      <span className="badge bg-danger mb-2">
-                        -{book.discountPercentage}%
-                      </span>
-                    </div>
-                  ) : (
-                    <h3 className="fw-bold m-0">
-                      Rs. {Number(book.price).toFixed(2)}
-                    </h3>
-                  )}
-                  <small
-                    className={`fw-bold ${book.stock > 0 ? "text-success" : "text-danger"}`}
-                  >
-                    {book.stock > 0 ? `${book.stock} in stock` : "Out of Stock"}
-                  </small>
+                <div className="d-flex align-items-center gap-3 mb-3">
+                  <span className="badge bg-secondary fs-6">
+                    {book.Genre?.name}
+                  </span>
+                  <div className="d-flex align-items-center text-warning fs-5">
+                    <FaStar className="me-1" />
+                    <span className="text-dark fw-bold">{avgRating}</span>
+                    <span className="text-muted ms-1 fs-6">
+                      ({book.Reviews?.length || 0} reviews)
+                    </span>
+                  </div>
                 </div>
 
-                <button
-                  onClick={handleAddToCart}
-                  className="btn btn-primary btn-lg px-4"
-                  disabled={book.stock < 1}
+                <p
+                  className="text-muted flex-grow-1"
+                  style={{ lineHeight: "1.8" }}
                 >
-                  <FaShoppingCart className="me-2" /> Add to Cart
-                </button>
+                  {book.description ||
+                    "No description available for this book."}
+                </p>
+
+                <div className="mt-auto pt-4 border-top">
+                  <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div>
+                      {book.discountPercentage > 0 ? (
+                        <div className="d-flex align-items-end gap-2">
+                          <h3 className="fw-bold text-success m-0">
+                            Rs. {itemPrice.toFixed(2)}
+                          </h3>
+                          <span className="text-decoration-line-through text-muted mb-1">
+                            Rs. {Number(book.price).toFixed(2)}
+                          </span>
+                          <span className="badge bg-danger mb-2">
+                            -{book.discountPercentage}%
+                          </span>
+                        </div>
+                      ) : (
+                        <h3 className="fw-bold m-0">
+                          Rs. {Number(book.price).toFixed(2)}
+                        </h3>
+                      )}
+                      <small
+                        className={`fw-bold ${book.stock > 0 ? "text-success" : "text-danger"}`}
+                      >
+                        {book.stock > 0
+                          ? `${book.stock} in stock`
+                          : "Out of Stock"}
+                      </small>
+                    </div>
+
+                    {/* 🔥 DYNAMIC RENDER: ADMIN/SELLER MANAGEMENT VS. BUYER CHECKOUT */}
+                    <div className="d-flex gap-2 w-100 w-md-auto mt-2 mt-md-0">
+                      {isManageable ? (
+                        // ADMIN OR SELLER VIEW
+                        <>
+                          <Link
+                            to={`/books/edit/${book.id}`}
+                            className="btn btn-warning btn-lg flex-fill px-4 fw-bold text-dark shadow-sm"
+                          >
+                            <FaEdit className="me-2" /> Edit Details
+                          </Link>
+                          <button
+                            onClick={handleDelete}
+                            className="btn btn-danger btn-lg flex-fill px-4 fw-bold shadow-sm"
+                          >
+                            <FaTrash className="me-2" /> Delete Book
+                          </button>
+                        </>
+                      ) : (
+                        // BUYER VIEW
+                        <>
+                          <button
+                            onClick={handleAddToCart}
+                            className="btn btn-outline-primary btn-lg flex-fill px-3 fw-bold"
+                            disabled={book.stock < 1}
+                          >
+                            <FaShoppingCart className="me-2" /> Add to Cart
+                          </button>
+                          <button
+                            onClick={handleBuyNow}
+                            className="btn btn-info btn-lg flex-fill px-4 fw-bold text-dark shadow-sm"
+                            disabled={book.stock < 1}
+                          >
+                            <FaBolt className="me-1" /> Buy Now
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* DARAZ-STYLE SELLER INFO COLUMN */}
+        <div className="col-lg-4">
+          <div
+            className="card shadow-sm border-secondary h-100 bg-dark text-white rounded-4"
+            style={{ borderWidth: "2px" }}
+          >
+            <div className="card-body p-4 d-flex flex-column">
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <span className="text-muted small text-uppercase fw-bold tracking-wide">
+                  Sold By
+                </span>
+                <Link
+                  to={`/store/${book.sellerId}`}
+                  className="btn btn-sm btn-outline-info fw-bold rounded-pill px-3"
+                >
+                  GO TO STORE
+                </Link>
+              </div>
+
+              <div className="d-flex align-items-center mb-4 pb-4 border-bottom border-secondary border-opacity-50">
+                <div
+                  className="rounded-circle bg-info bg-opacity-25 d-flex justify-content-center align-items-center me-3"
+                  style={{ width: "60px", height: "60px", color: "#38bdf8" }}
+                >
+                  <FaStore size={28} />
+                </div>
+                <div>
+                  <h4
+                    className="m-0 fw-bold text-truncate"
+                    style={{ maxWidth: "200px" }}
+                  >
+                    {book.Seller?.storeName ||
+                      book.Seller?.username ||
+                      "Independent Vendor"}
+                  </h4>
+                  <div className="text-success small mt-1 d-flex align-items-center fw-bold">
+                    <FaCheckCircle className="me-1" /> Verified Seller
+                  </div>
+                </div>
+              </div>
+
+              <div className="row text-center mt-auto">
+                <div className="col-4 border-end border-secondary border-opacity-50">
+                  <div
+                    className="text-muted mb-1"
+                    style={{ fontSize: "11px", letterSpacing: "0.5px" }}
+                  >
+                    POSITIVE RATINGS
+                  </div>
+                  <div className="fw-bold fs-4 text-white">92%</div>
+                </div>
+                <div className="col-4 border-end border-secondary border-opacity-50">
+                  <div
+                    className="text-muted mb-1"
+                    style={{ fontSize: "11px", letterSpacing: "0.5px" }}
+                  >
+                    SHIP ON TIME
+                  </div>
+                  <div className="fw-bold fs-4 text-white">100%</div>
+                </div>
+                <div className="col-4">
+                  <div
+                    className="text-muted mb-1"
+                    style={{ fontSize: "11px", letterSpacing: "0.5px" }}
+                  >
+                    CHAT RESPONSE
+                  </div>
+                  <div className="fw-bold fs-4 text-white">98%</div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 🔥 NEW: DISCOVERY ENGINE (Recommendations) */}
+      {/* DISCOVERY ENGINE */}
       {recommendations.length > 0 && (
         <div className="mb-5">
           <h4 className="fw-bold mb-4">
@@ -266,7 +459,6 @@ const BookDetails = () => {
       {/* REVIEWS SECTION */}
       <h3 className="fw-bold mb-4">Customer Reviews</h3>
       <div className="row g-4">
-        {/* ADD REVIEW FORM */}
         <div className="col-lg-4">
           <div
             className="card shadow-sm border-0 p-4 sticky-top"
@@ -319,7 +511,6 @@ const BookDetails = () => {
           </div>
         </div>
 
-        {/* REVIEW LIST */}
         <div className="col-lg-8">
           {book.Reviews?.length === 0 ? (
             <div className="text-center p-5 bg-white rounded shadow-sm">

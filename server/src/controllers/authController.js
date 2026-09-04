@@ -49,7 +49,16 @@ export const getProfile = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   try {
-    const { username, email, phone, address, city } = req.body;
+    // 🔥 Added storeName and storeDescription to the extracted body
+    const {
+      username,
+      email,
+      phone,
+      address,
+      city,
+      storeName,
+      storeDescription,
+    } = req.body;
     const user = await User.findByPk(req.user.id);
 
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -59,6 +68,12 @@ export const updateProfile = async (req, res) => {
     user.phone = phone || user.phone;
     user.address = address || user.address;
     user.city = city || user.city;
+
+    // 🔥 Only update these if the user is actually a seller
+    if (user.role === "seller") {
+      user.storeName = storeName || user.storeName;
+      user.storeDescription = storeDescription || user.storeDescription;
+    }
 
     if (req.file) {
       user.avatar = req.file.path;
@@ -77,6 +92,8 @@ export const updateProfile = async (req, res) => {
         avatar: user.avatar,
         address: user.address,
         city: user.city,
+        storeName: user.storeName, // Send back updated store data
+        loyaltyPoints: user.loyaltyPoints,
       },
     });
   } catch (error) {

@@ -11,6 +11,8 @@ import {
   FaCamera,
   FaShieldAlt,
   FaLock,
+  FaStore,
+  FaInfoCircle,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import { AuthContext } from "../../context/AuthContext.jsx";
@@ -28,6 +30,8 @@ const Profile = () => {
     phone: "",
     address: "",
     city: "",
+    storeName: "", // 🔥 Added for Seller
+    storeDescription: "", // 🔥 Added for Seller
   });
   const [avatar, setAvatar] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -61,6 +65,8 @@ const Profile = () => {
         phone: data.phone || "",
         address: data.address || "",
         city: data.city || "",
+        storeName: data.storeName || "", // 🔥 Catch existing store name
+        storeDescription: data.storeDescription || "", // 🔥 Catch existing description
       });
 
       if (data.avatar) {
@@ -105,6 +111,13 @@ const Profile = () => {
       submitData.append("phone", formData.phone);
       submitData.append("address", formData.address);
       submitData.append("city", formData.city);
+
+      // 🔥 Send Seller data if they are a seller
+      if (user?.role === "seller") {
+        submitData.append("storeName", formData.storeName);
+        submitData.append("storeDescription", formData.storeDescription);
+      }
+
       if (avatar) submitData.append("avatar", avatar);
 
       const response = await axios.put(`${API_URL}/auth/profile`, submitData, {
@@ -124,7 +137,6 @@ const Profile = () => {
     }
   };
 
-  // --- NEW: Handle Password Change ---
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
 
@@ -151,9 +163,8 @@ const Profile = () => {
         oldPassword: "",
         newPassword: "",
         confirmPassword: "",
-      }); // Clear the form
+      });
     } catch (error) {
-      // Show the exact error the backend throws (e.g., "Incorrect current password")
       toast.error(error.response?.data?.error || "Failed to change password");
     } finally {
       setChangingPassword(false);
@@ -168,14 +179,17 @@ const Profile = () => {
     );
 
   return (
-    <div className="container-fluid mt-2 max-w-75">
-      <h2 className="fw-bold mb-4">My Profile</h2>
+    <div className="container-fluid mt-2 max-w-75 mb-5">
+      <h2 className="fw-bold mb-4 text-white">My Profile</h2>
 
       <div className="row g-4">
         {/* LEFT COLUMN: Profile Details */}
         <div className="col-lg-7">
-          <div className="card shadow-sm border-0 mb-4">
-            <div className="card-body p-4 text-center border-bottom bg-light rounded-top">
+          <div className="card shadow-lg border-secondary rounded-4 overflow-hidden mb-4 bg-dark">
+            <div
+              className="card-body p-4 text-center border-bottom border-secondary border-opacity-25"
+              style={{ background: "rgba(255,255,255,0.02)" }}
+            >
               <div
                 className="position-relative d-inline-block mx-auto mb-3"
                 style={{ cursor: "pointer" }}
@@ -185,17 +199,17 @@ const Profile = () => {
                   <img
                     src={preview}
                     alt="Profile Preview"
-                    className="rounded-circle object-fit-cover shadow-sm border border-3 border-white"
+                    className="rounded-circle object-fit-cover shadow-sm border border-3 border-secondary"
                     style={{ width: "120px", height: "120px" }}
                   />
                 ) : (
                   <FaUserCircle
                     size={120}
-                    color="#2563eb"
-                    className="bg-white rounded-circle shadow-sm"
+                    color="#3b82f6"
+                    className="rounded-circle shadow-sm bg-dark"
                   />
                 )}
-                <div className="position-absolute bottom-0 end-0 bg-primary text-white rounded-circle p-2 border border-2 border-white">
+                <div className="position-absolute bottom-0 end-0 bg-primary text-white rounded-circle p-2 border border-2 border-dark shadow-sm">
                   <FaCamera size={14} />
                 </div>
                 <input
@@ -207,22 +221,24 @@ const Profile = () => {
                 />
               </div>
 
-              <h4 className="fw-bold m-0">{user?.username}</h4>
-              <span className="badge bg-primary mt-2 text-uppercase">
+              <h4 className="fw-bold m-0 text-white">{user?.username}</h4>
+              <span
+                className={`badge mt-2 text-uppercase ${user?.role === "seller" ? "bg-success" : user?.role === "admin" ? "bg-danger" : "bg-primary"}`}
+              >
                 {user?.role}
               </span>
             </div>
 
-            <div className="card-body p-4">
+            <div className="card-body p-4 text-white">
               <form onSubmit={handleProfileSubmit}>
                 <div className="row g-3 mb-3">
                   <div className="col-md-6">
-                    <label className="form-label fw-bold">
-                      <FaUser className="me-2 text-muted" /> Username
+                    <label className="form-label fw-bold text-muted small">
+                      <FaUser className="me-2" /> USERNAME
                     </label>
                     <input
                       type="text"
-                      className="form-control"
+                      className="form-control bg-dark text-white border-secondary"
                       name="username"
                       value={formData.username}
                       onChange={handleProfileChange}
@@ -230,12 +246,12 @@ const Profile = () => {
                     />
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label fw-bold">
-                      <FaPhone className="me-2 text-muted" /> Phone Number
+                    <label className="form-label fw-bold text-muted small">
+                      <FaPhone className="me-2" /> PHONE NUMBER
                     </label>
                     <input
                       type="text"
-                      className="form-control"
+                      className="form-control bg-dark text-white border-secondary"
                       name="phone"
                       value={formData.phone}
                       onChange={handleProfileChange}
@@ -245,12 +261,12 @@ const Profile = () => {
                 </div>
 
                 <div className="mb-3">
-                  <label className="form-label fw-bold">
-                    <FaEnvelope className="me-2 text-muted" /> Email Address
+                  <label className="form-label fw-bold text-muted small">
+                    <FaEnvelope className="me-2" /> EMAIL ADDRESS
                   </label>
                   <input
                     type="email"
-                    className="form-control"
+                    className="form-control bg-dark text-white border-secondary"
                     name="email"
                     value={formData.email}
                     onChange={handleProfileChange}
@@ -258,17 +274,16 @@ const Profile = () => {
                   />
                 </div>
 
-                <hr className="my-4 text-muted" />
+                <hr className="my-4 border-secondary opacity-50" />
 
                 <div className="row g-3 mb-4">
                   <div className="col-md-6">
-                    <label className="form-label fw-bold">
-                      <FaMapMarkerAlt className="me-2 text-muted" /> Default
-                      Address
+                    <label className="form-label fw-bold text-muted small">
+                      <FaMapMarkerAlt className="me-2" /> DEFAULT ADDRESS
                     </label>
                     <input
                       type="text"
-                      className="form-control"
+                      className="form-control bg-dark text-white border-secondary"
                       name="address"
                       value={formData.address}
                       onChange={handleProfileChange}
@@ -276,12 +291,12 @@ const Profile = () => {
                     />
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label fw-bold">
-                      <FaCity className="me-2 text-muted" /> City
+                    <label className="form-label fw-bold text-muted small">
+                      <FaCity className="me-2" /> CITY
                     </label>
                     <input
                       type="text"
-                      className="form-control"
+                      className="form-control bg-dark text-white border-secondary"
                       name="city"
                       value={formData.city}
                       onChange={handleProfileChange}
@@ -290,9 +305,50 @@ const Profile = () => {
                   </div>
                 </div>
 
+                {/* 🔥 DYNAMIC SELLER BUSINESS SECTION 🔥 */}
+                {user?.role === "seller" && (
+                  <>
+                    <hr className="my-4 border-secondary opacity-50" />
+                    <h5
+                      className="fw-bold mb-3 d-flex align-items-center"
+                      style={{ color: "#10b981" }}
+                    >
+                      <FaStore className="me-2" /> Business Information
+                    </h5>
+
+                    <div className="mb-3">
+                      <label className="form-label fw-bold text-muted small">
+                        STORE / BUSINESS NAME
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control bg-dark text-white border-secondary"
+                        name="storeName"
+                        value={formData.storeName}
+                        onChange={handleProfileChange}
+                        required
+                      />
+                    </div>
+
+                    <div className="mb-4">
+                      <label className="form-label fw-bold text-muted small">
+                        <FaInfoCircle className="me-1" /> STORE DESCRIPTION
+                      </label>
+                      <textarea
+                        className="form-control bg-dark text-white border-secondary"
+                        name="storeDescription"
+                        rows="3"
+                        value={formData.storeDescription}
+                        onChange={handleProfileChange}
+                        placeholder="Describe your bookstore..."
+                      ></textarea>
+                    </div>
+                  </>
+                )}
+
                 <button
                   type="submit"
-                  className="btn btn-primary btn-lg w-100 fw-bold d-flex justify-content-center align-items-center gap-2"
+                  className="btn btn-primary btn-lg w-100 fw-bold d-flex justify-content-center align-items-center gap-2 rounded-pill shadow-sm"
                   disabled={saving}
                 >
                   {saving ? (
@@ -309,21 +365,21 @@ const Profile = () => {
 
         {/* RIGHT COLUMN: Security & Password */}
         <div className="col-lg-5">
-          <div className="card shadow-sm border-0">
-            <div className="card-header bg-white py-3 border-bottom">
-              <h5 className="m-0 fw-bold d-flex align-items-center gap-2">
-                <FaShieldAlt className="text-danger" /> Security & Password
+          <div className="card shadow-sm border-secondary rounded-4 bg-dark text-white">
+            <div className="card-header bg-transparent py-3 border-bottom border-secondary border-opacity-50">
+              <h5 className="m-0 fw-bold d-flex align-items-center gap-2 text-danger">
+                <FaShieldAlt /> Security & Password
               </h5>
             </div>
             <div className="card-body p-4">
               <form onSubmit={handlePasswordSubmit}>
                 <div className="mb-3">
-                  <label className="form-label fw-bold">
-                    <FaLock className="me-2 text-muted" /> Current Password
+                  <label className="form-label fw-bold text-muted small">
+                    <FaLock className="me-2" /> CURRENT PASSWORD
                   </label>
                   <input
                     type="password"
-                    className="form-control"
+                    className="form-control bg-dark text-white border-secondary"
                     name="oldPassword"
                     value={passwordData.oldPassword}
                     onChange={handlePasswordChange}
@@ -332,12 +388,12 @@ const Profile = () => {
                 </div>
 
                 <div className="mb-3">
-                  <label className="form-label fw-bold text-success">
-                    New Password
+                  <label className="form-label fw-bold text-success small">
+                    NEW PASSWORD
                   </label>
                   <input
                     type="password"
-                    className="form-control"
+                    className="form-control bg-dark text-white border-secondary"
                     name="newPassword"
                     value={passwordData.newPassword}
                     onChange={handlePasswordChange}
@@ -347,12 +403,12 @@ const Profile = () => {
                 </div>
 
                 <div className="mb-4">
-                  <label className="form-label fw-bold text-success">
-                    Confirm New Password
+                  <label className="form-label fw-bold text-success small">
+                    CONFIRM NEW PASSWORD
                   </label>
                   <input
                     type="password"
-                    className="form-control"
+                    className="form-control bg-dark text-white border-secondary"
                     name="confirmPassword"
                     value={passwordData.confirmPassword}
                     onChange={handlePasswordChange}
@@ -363,7 +419,7 @@ const Profile = () => {
 
                 <button
                   type="submit"
-                  className="btn btn-outline-danger w-100 fw-bold"
+                  className="btn btn-outline-danger w-100 fw-bold rounded-pill"
                   disabled={changingPassword}
                 >
                   {changingPassword ? "Updating..." : "Change Password"}

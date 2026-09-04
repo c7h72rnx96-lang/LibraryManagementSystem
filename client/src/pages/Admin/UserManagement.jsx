@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom"; // 🔥 1. Added useNavigate
 import {
   FaUserShield,
   FaBan,
@@ -17,6 +18,7 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 const UserManagement = () => {
   const { user } = useContext(AuthContext);
+  const navigate = useNavigate(); // 🔥 2. Initialized navigate
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -173,7 +175,12 @@ const UserManagement = () => {
                 {activeUsers.map((u) => (
                   <tr
                     key={u.id}
-                    style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+                    onClick={() => navigate(`/manage-users/${u.id}`)} // 🔥 3. MAKE ROW CLICKABLE
+                    style={{
+                      borderBottom: "1px solid rgba(255,255,255,0.05)",
+                      cursor: "pointer", // 🔥 4. POINTER CURSOR
+                    }}
+                    className="hover-bg-dark"
                   >
                     <td className="py-3 px-4 border-0">
                       <div className="d-flex align-items-center">
@@ -232,7 +239,10 @@ const UserManagement = () => {
                     <td className="py-3 px-4 border-0 text-end">
                       {u.role !== "admin" && (
                         <button
-                          onClick={() => handleToggleBlock(u.id, u.isBlocked)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // 🔥 5. PREVENTS ROW CLICK
+                            handleToggleBlock(u.id, u.isBlocked);
+                          }}
                           className={`btn btn-sm fw-bold rounded-pill px-3 ${u.isBlocked ? "btn-outline-success" : "btn-outline-danger"}`}
                           style={{ border: "1px solid rgba(255,255,255,0.2)" }}
                         >

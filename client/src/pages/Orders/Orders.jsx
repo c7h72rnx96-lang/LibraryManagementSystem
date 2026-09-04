@@ -1,8 +1,9 @@
+// === src/pages/Orders/Orders.jsx ===
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { FaBoxOpen, FaCheckCircle, FaClock, FaDownload } from "react-icons/fa"; // <-- Added FaDownload
+import { FaBoxOpen, FaCheckCircle, FaClock, FaDownload } from "react-icons/fa";
 import toast from "react-hot-toast";
-import { Link, useLocation, useNavigate } from "react-router-dom"; // <-- Added useLocation, useNavigate
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -13,34 +14,27 @@ const Orders = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // 🔥 STRIPE PAYMENT VERIFICATION ENGINE
+  // 🔥 STRIPE PAYMENT UI HANDLER (Security handled by Webhook now)
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
     const paymentStatus = queryParams.get("payment");
     const orderId = queryParams.get("orderId");
 
     if (paymentStatus === "success" && orderId) {
-      const verifyPayment = async () => {
-        try {
-          const token = sessionStorage.getItem("token");
-          await axios.post(
-            `${API_URL}/payments/verify`,
-            { orderId },
-            { headers: { Authorization: `Bearer ${token}` } },
-          );
-          toast.success("🎉 Payment successful! Your order is now paid.");
-          // Clean the URL so it doesn't verify twice if they refresh
-          navigate("/orders", { replace: true });
-          fetchOrders();
-        } catch (error) {
-          toast.error("Failed to verify payment.");
-        }
-      };
-      verifyPayment();
+      // The backend Webhook has already secured the money.
+      // We just need to show the success message to the user!
+      toast.success(
+        "🎉 Payment successful! Your order is now being processed.",
+      );
+
+      // Clean the URL so it doesn't show twice if they refresh
+      navigate("/orders", { replace: true });
+      fetchOrders();
     } else if (paymentStatus === "cancelled") {
       toast.error("Payment was cancelled. You can try again.");
       navigate("/orders", { replace: true });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, navigate]);
 
   useEffect(() => {
@@ -62,7 +56,7 @@ const Orders = () => {
     }
   };
 
-  // 🔥 NEW: PDF INVOICE DOWNLOADER FOR CUSTOMERS
+  // 🔥 PDF INVOICE DOWNLOADER FOR CUSTOMERS
   const handleDownloadInvoice = async (orderId) => {
     const toastId = toast.loading("Generating your PDF...");
     try {
@@ -175,7 +169,7 @@ const Orders = () => {
                       <p className="mb-1 d-flex justify-content-between">
                         <span className="text-muted">Payment:</span>
                         <strong>
-                          {order.paymentMethod}{" "}
+                          {order.paymentMethod} -{" "}
                           <span
                             className={
                               order.paymentStatus === "Paid"
@@ -187,12 +181,38 @@ const Orders = () => {
                           </span>
                         </strong>
                       </p>
+                      <hr className="my-2" />
+
+                      <p className="mb-1 d-flex justify-content-between">
+                        <span className="text-muted">Subtotal:</span>
+                        <strong>
+                          Rs. {Number(order.totalAmount).toFixed(2)}
+                        </strong>
+                      </p>
                       <p className="mb-1 d-flex justify-content-between">
                         <span className="text-muted">Delivery:</span>
                         <strong>
                           Rs. {Number(order.deliveryFee).toFixed(2)}
                         </strong>
                       </p>
+
+                      {Number(order.totalAmount) +
+                        Number(order.deliveryFee) -
+                        Number(order.grandTotal) >
+                        0 && (
+                        <p className="mb-1 d-flex justify-content-between text-danger">
+                          <span className="fw-bold">Discounts:</span>
+                          <strong>
+                            - Rs.{" "}
+                            {(
+                              Number(order.totalAmount) +
+                              Number(order.deliveryFee) -
+                              Number(order.grandTotal)
+                            ).toFixed(2)}
+                          </strong>
+                        </p>
+                      )}
+
                       <hr className="my-2" />
                       <p className="mb-3 d-flex justify-content-between fs-5">
                         <span className="fw-bold">Total:</span>
@@ -201,7 +221,7 @@ const Orders = () => {
                         </span>
                       </p>
 
-                      {/* 🔥 NEW: Customer PDF Download Button */}
+                      {/* Customer PDF Download Button */}
                       <button
                         onClick={() => handleDownloadInvoice(order.id)}
                         className="btn btn-outline-secondary w-100 fw-bold shadow-sm"

@@ -9,7 +9,8 @@ import {
   toggleItemPackedStatus,
   getSellerOrders,
   getSellerWalletStats,
-  generateInvoice, // <-- 1. ADD THIS IMPORT
+  generateInvoice,
+  getCustomerDashboardStats, // <-- 1. ADD THIS IMPORT
 } from "../controllers/orderController.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 
@@ -24,8 +25,9 @@ router.get("/all", authenticate, authorize("admin"), getAllOrders);
 router.get("/admin/stats", authenticate, authorize("admin"), getDashboardStats);
 router.put("/:id/status", authenticate, authorize("admin"), updateOrderStatus);
 router.get("/admin/:id", authenticate, authorize("admin"), getOrderDetails);
-
+router.get("/customer/dashboard", authenticate, getCustomerDashboardStats);
 // Seller routes
+
 router.get("/seller", authenticate, authorize("seller"), getSellerOrders);
 router.get(
   "/seller/wallet",

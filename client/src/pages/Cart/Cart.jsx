@@ -17,6 +17,7 @@ const Cart = () => {
   const [cartItems, setCartItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]); // Tracks which checkboxes are ticked!
   const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -57,16 +58,14 @@ const Cart = () => {
   // --- NEW: Handle + and - Quantity Buttons ---
   const handleQuantityChange = async (itemId, newQuantity) => {
     if (newQuantity < 1) return;
+    setProcessingId(itemId); // 🔥 Disable buttons for this item
     try {
       const token = sessionStorage.getItem("token");
       await axios.put(
         `${API_URL}/cart/${itemId}`,
         { quantity: newQuantity },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
+        { headers: { Authorization: `Bearer ${token}` } },
       );
-      // Update local state instantly so the UI feels snappy
       setCartItems(
         cartItems.map((item) =>
           item.id === itemId ? { ...item, quantity: newQuantity } : item,
@@ -74,6 +73,8 @@ const Cart = () => {
       );
     } catch (error) {
       toast.error("Failed to update quantity");
+    } finally {
+      setProcessingId(null); // 🔥 Re-enable buttons
     }
   };
 
@@ -108,8 +109,14 @@ const Cart = () => {
     if (selectedItems.length === 0) {
       return toast.error("Please select at least one item to checkout!");
     }
-    // Pass the selected item IDs secretly to the Checkout page!
-    navigate("/checkout", { state: { selectedCartItemIds: selectedItems } });
+
+    // Pass BOTH the selected IDs and the calculated subtotal securely
+    navigate("/checkout", {
+      state: {
+        selectedCartItemIds: selectedItems,
+        cartSubtotal: subtotal, // <-- 1. ADD THIS LINE
+      },
+    });
   };
 
   if (loading)
@@ -212,17 +219,24 @@ const Cart = () => {
                             onClick={() =>
                               handleQuantityChange(item.id, item.quantity - 1)
                             }
-                            disabled={item.quantity <= 1}
+                            disabled={
+                              item.quantity <= 1 || processingId === item.id
+                            } // 🔥 Updated
                           >
                             <FaMinus size={12} />
                           </button>
+
                           <span className="fw-bold fs-5">{item.quantity}</span>
+
                           <button
                             className="btn btn-sm text-secondary p-1"
                             onClick={() =>
                               handleQuantityChange(item.id, item.quantity + 1)
                             }
-                            disabled={item.quantity >= item.Book.stock}
+                            disabled={
+                              item.quantity >= item.Book.stock ||
+                              processingId === item.id
+                            } // 🔥 Updated
                           >
                             <FaPlus size={12} />
                           </button>

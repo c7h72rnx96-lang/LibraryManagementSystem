@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useContext } from "react";
+// === src/pages/Orders/SellerOrders.jsx ===
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 import {
   FaBoxOpen,
-  FaUser,
   FaMapMarkerAlt,
   FaCheckCircle,
-  FaMoneyBillWave,
+  FaUser,
+  FaPhoneAlt,
+  FaPrint, // <-- Added Print Icon
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -65,6 +67,29 @@ const SellerOrders = () => {
     }
   };
 
+  // 🔥 NEW: Download PDF Packing Slip
+  const handleDownloadInvoice = async (orderId) => {
+    const toastId = toast.loading("Generating Packing Slip...");
+    try {
+      const token = sessionStorage.getItem("token");
+      const response = await axios.get(`${API_URL}/orders/${orderId}/invoice`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob",
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `PackingSlip_${orderId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success("Packing slip downloaded!", { id: toastId });
+    } catch (error) {
+      toast.error("Failed to download packing slip", { id: toastId });
+    }
+  };
+
   if (loading)
     return (
       <div className="text-center mt-5">
@@ -96,50 +121,63 @@ const SellerOrders = () => {
       ) : (
         <div className="row g-4">
           {orderItems.map((item) => (
-            <div key={item.id} className="col-lg-6">
+            <div key={item.id} className="col-xl-6">
               <div
-                className="card shadow-sm border-0 rounded-4 overflow-hidden"
+                className="card shadow-lg border-0 rounded-4 overflow-hidden h-100"
                 style={{
-                  background: "rgba(15, 23, 42, 0.7)",
-                  backdropFilter: "blur(20px)",
-                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "#161b2b", // Matches screenshot dark blue/gray
+                  border: "1px solid rgba(255,255,255,0.05)",
                 }}
               >
                 {/* Header: Order Info & Earnings */}
                 <div
                   className="card-header border-bottom py-3 d-flex justify-content-between align-items-center"
-                  style={{ background: "rgba(255,255,255,0.05)" }}
+                  style={{
+                    background: "transparent",
+                    borderBottomColor: "rgba(255,255,255,0.05) !important",
+                  }}
                 >
                   <div>
                     <span
                       className="text-muted small fw-bold d-block"
-                      style={{ letterSpacing: "1px" }}
+                      style={{ letterSpacing: "0.5px", fontSize: "11px" }}
                     >
                       ORDER #{item.Order.id}
                     </span>
-                    <small className="text-muted">
+                    <small className="text-muted" style={{ fontSize: "12px" }}>
                       {new Date(item.createdAt).toLocaleString()}
                     </small>
                   </div>
-                  <div className="text-end">
+
+                  {/* 🔥 UPDATED: Earnings + PDF Print Button Layout */}
+                  <div className="text-end d-flex flex-column align-items-end">
                     <span
-                      className="text-muted small fw-bold d-block"
-                      style={{ letterSpacing: "1px" }}
+                      className="text-muted small fw-bold d-block text-uppercase"
+                      style={{ letterSpacing: "0.5px", fontSize: "11px" }}
                     >
                       YOUR EARNINGS
                     </span>
-                    <span className="fs-5 fw-bold text-success">
-                      <FaMoneyBillWave className="me-1" /> Rs.{" "}
-                      {Number(item.sellerEarnings).toFixed(2)}
+                    <span
+                      className="fs-5 fw-bold mb-2"
+                      style={{ color: "#34d399" }}
+                    >
+                      Rs. {Number(item.sellerEarnings).toFixed(2)}
                     </span>
+                    <button
+                      onClick={() => handleDownloadInvoice(item.Order.id)}
+                      className="btn btn-sm btn-outline-light rounded-pill px-3"
+                      style={{ fontSize: "11px" }}
+                    >
+                      <FaPrint className="me-1" /> Packing Slip
+                    </button>
                   </div>
                 </div>
 
                 <div className="card-body p-4">
-                  <div className="row">
-                    {/* Left: Book Details */}
-                    <div className="col-md-7 border-end border-secondary border-opacity-25">
-                      <div className="d-flex align-items-center gap-3 mb-3">
+                  <div className="row g-0 h-100 align-items-center">
+                    {/* Left: Book Image & Details */}
+                    <div className="col-md-6 border-end border-secondary border-opacity-25 pe-md-4">
+                      <div className="d-flex align-items-start gap-3 mb-4">
                         <img
                           src={
                             item.Book.image?.startsWith("http")
@@ -147,14 +185,21 @@ const SellerOrders = () => {
                               : `${SERVER_URL}/uploads/${item.Book.image}`
                           }
                           alt={item.Book.title}
-                          className="rounded shadow-sm object-fit-cover"
-                          style={{ width: "60px", height: "85px" }}
+                          className="rounded shadow-sm bg-white p-1"
+                          style={{
+                            width: "60px",
+                            height: "85px",
+                            objectFit: "contain",
+                          }}
                         />
                         <div>
-                          <h6 className="fw-bold text-white mb-1">
+                          <h6
+                            className="fw-bold text-white mb-1"
+                            style={{ fontSize: "15px" }}
+                          >
                             {item.Book.title}
                           </h6>
-                          <span className="text-muted small d-block">
+                          <span className="text-muted small d-block mb-1">
                             Qty: {item.quantity}
                           </span>
                           <span className="text-muted small d-block">
@@ -164,26 +209,26 @@ const SellerOrders = () => {
                         </div>
                       </div>
 
-                      {/* Packing Action */}
+                      {/* The Toggle Switch matching the screenshot */}
                       <div
-                        className="mt-4 p-3 rounded-3"
+                        className="d-flex align-items-center p-2 rounded px-3"
                         style={{
                           background: item.isPacked
                             ? "rgba(16, 185, 129, 0.1)"
-                            : "rgba(255,255,255,0.05)",
+                            : "rgba(255,255,255,0.03)",
                           border: item.isPacked
-                            ? "1px solid #10b981"
-                            : "1px solid rgba(255,255,255,0.1)",
+                            ? "1px solid rgba(16, 185, 129, 0.2)"
+                            : "1px solid rgba(255,255,255,0.05)",
                         }}
                       >
-                        <div className="form-check form-switch d-flex align-items-center m-0 p-0">
+                        <div className="form-check form-switch m-0 p-0 d-flex align-items-center">
                           <input
-                            className="form-check-input ms-0 me-3 mt-0"
+                            className="form-check-input m-0 me-2"
                             type="checkbox"
                             role="switch"
                             style={{
-                              width: "40px",
-                              height: "20px",
+                              width: "35px",
+                              height: "18px",
                               cursor: "pointer",
                             }}
                             checked={item.isPacked}
@@ -192,59 +237,95 @@ const SellerOrders = () => {
                             }
                             disabled={item.itemStatus === "Delivered"}
                           />
-                          <label
-                            className={`form-check-label fw-bold m-0 ${item.isPacked ? "text-success" : "text-white"}`}
-                            style={{ cursor: "pointer" }}
-                            onClick={() => {
-                              if (item.itemStatus !== "Delivered")
-                                togglePack(
-                                  item.Order.id,
-                                  item.id,
-                                  item.isPacked,
-                                );
-                            }}
-                          >
-                            {item.itemStatus === "Delivered" ? (
-                              <>
-                                <FaCheckCircle className="me-1" /> Delivered &
-                                Paid
-                              </>
-                            ) : item.isPacked ? (
-                              "Packed & Ready for Courier"
-                            ) : (
-                              "Mark as Packed"
-                            )}
-                          </label>
                         </div>
+                        <label
+                          className={`m-0 fw-bold small ${item.isPacked ? "text-success" : "text-muted"}`}
+                          style={{ cursor: "pointer", paddingTop: "2px" }}
+                          onClick={() => {
+                            if (item.itemStatus !== "Delivered")
+                              togglePack(item.Order.id, item.id, item.isPacked);
+                          }}
+                        >
+                          {item.itemStatus === "Delivered" ? (
+                            <>
+                              <FaCheckCircle className="me-1" /> Delivered &
+                              Paid
+                            </>
+                          ) : item.isPacked ? (
+                            "Packed & Ready"
+                          ) : (
+                            "Mark as Packed"
+                          )}
+                        </label>
                       </div>
                     </div>
 
-                    {/* Right: Customer Details */}
-                    <div className="col-md-5 ps-md-4 mt-3 mt-md-0">
-                      <h6 className="fw-bold text-white mb-3 d-flex align-items-center">
-                        <FaUser className="me-2 text-primary" /> Ship To:
-                      </h6>
-                      <p className="mb-1 text-light fw-semibold">
+                    {/* Right: Shipping Info */}
+                    <div className="col-md-6 ps-md-4 mt-4 mt-md-0 d-flex flex-column justify-content-center h-100">
+                      <div className="d-flex align-items-center mb-2 text-primary">
+                        <FaUser className="me-2" size={14} />
+                        <span className="fw-bold text-white small">
+                          Ship To:
+                        </span>
+                      </div>
+
+                      <p
+                        className="mb-2 text-white fw-semibold ms-4 ps-1"
+                        style={{ fontSize: "14px" }}
+                      >
                         {item.Order.fullName}
                       </p>
-                      <p className="mb-1 text-muted small d-flex align-items-start gap-2">
-                        <FaMapMarkerAlt className="text-danger mt-1 flex-shrink-0" />
-                        <span>
+
+                      <div className="d-flex align-items-start mb-2">
+                        <FaMapMarkerAlt
+                          className="text-danger me-2 mt-1"
+                          size={14}
+                        />
+                        <p
+                          className="mb-0 text-muted small"
+                          style={{ lineHeight: "1.4" }}
+                        >
                           {item.Order.address},<br />
                           {item.Order.city}
-                        </span>
-                      </p>
-                      <p className="mb-0 text-muted small mt-2">
-                        📞 {item.Order.phone}
-                      </p>
+                        </p>
+                      </div>
 
-                      <div className="mt-3">
-                        <span
-                          className={`badge ${item.Order.paymentStatus === "Paid" ? "bg-success" : "bg-warning text-dark"} w-100 py-2`}
-                        >
-                          {item.Order.paymentMethod} -{" "}
-                          {item.Order.paymentStatus}
-                        </span>
+                      <div className="d-flex align-items-center mt-1">
+                        <FaPhoneAlt
+                          className="text-secondary me-2 ms-1"
+                          size={12}
+                        />
+                        <p className="mb-0 text-muted small">
+                          {item.Order.phone}
+                        </p>
+                      </div>
+
+                      {/* Payment Badge matched to screenshot styling */}
+                      <div className="mt-4 text-center">
+                        {item.Order.paymentStatus === "Paid" ? (
+                          <div
+                            className="badge w-100 py-2 rounded-pill fw-bold"
+                            style={{
+                              background: "#10b981",
+                              color: "#fff",
+                              letterSpacing: "0.5px",
+                            }}
+                          >
+                            - Paid
+                          </div>
+                        ) : (
+                          <div
+                            className="badge w-100 py-2 rounded-pill fw-bold"
+                            style={{
+                              background: "rgba(245, 158, 11, 0.2)",
+                              color: "#f59e0b",
+                              border: "1px solid rgba(245, 158, 11, 0.3)",
+                              letterSpacing: "0.5px",
+                            }}
+                          >
+                            Cash on Delivery (Pending)
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

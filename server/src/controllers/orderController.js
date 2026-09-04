@@ -5,14 +5,14 @@ import {
   Order,
   OrderItem,
   User,
+  Coupon,
+  Payout,
+  Genre,
 } from "../models/index.js";
 import { sequelize } from "../config/database.js";
 import { Op } from "sequelize";
 import PDFDocument from "pdfkit";
 
-// ==========================================
-// 1. CUSTOMER: CREATE A NEW ORDER (FINAL FORM)
-// ==========================================
 export const createOrder = async (req, res) => {
   const transaction = await sequelize.transaction();
 
@@ -59,8 +59,16 @@ export const createOrder = async (req, res) => {
     }
 
     let subtotal = 0;
+    let eligibleSubtotal = 0;
 
-    // Validate stock and calculate raw item subtotal
+    let appliedCoupon = null;
+    if (couponCode) {
+      appliedCoupon = await Coupon.findOne({
+        where: { code: couponCode.trim().toUpperCase(), isActive: true },
+        transaction,
+      });
+    }
+
     for (const item of selectedItems) {
       const book = item.Book;
       if (book.stock < item.quantity) {
@@ -75,45 +83,61 @@ export const createOrder = async (req, res) => {
           ? Number(book.price) * (1 - book.discountPercentage / 100)
           : Number(book.price);
 
-      subtotal += effectivePrice * item.quantity;
-    }
+      const lineTotal = effectivePrice * item.quantity;
+      subtotal += lineTotal;
 
-    // --- 1. COUPON REDUCTION ENGINE ---
-    let couponDiscount = 0;
-    let appliedCoupon = null;
+      if (appliedCoupon) {
+        let isEligible = true;
+        if (appliedCoupon.sellerId && book.sellerId !== appliedCoupon.sellerId)
+          isEligible = false;
+        if (
+          appliedCoupon.applicableGenreId &&
+          book.genreId !== appliedCoupon.applicableGenreId
+        )
+          isEligible = false;
+        if (appliedCoupon.excludeDiscountedItems && book.discountPercentage > 0)
+          isEligible = false;
 
-    if (couponCode) {
-      appliedCoupon = await Coupon.findOne({
-        where: { code: couponCode.trim().toUpperCase(), isActive: true },
-        transaction,
-      });
-
-      if (appliedCoupon && subtotal >= Number(appliedCoupon.minOrderAmount)) {
-        if (appliedCoupon.discountType === "percentage") {
-          couponDiscount =
-            (subtotal * Number(appliedCoupon.discountValue)) / 100;
-          if (
-            appliedCoupon.maxDiscountAmount &&
-            couponDiscount > Number(appliedCoupon.maxDiscountAmount)
-          ) {
-            couponDiscount = Number(appliedCoupon.maxDiscountAmount);
-          }
-        } else {
-          couponDiscount = Math.min(
-            Number(appliedCoupon.discountValue),
-            subtotal,
-          );
-        }
-
-        appliedCoupon.usedCount += 1;
-        await appliedCoupon.save({ transaction });
+        if (isEligible) eligibleSubtotal += lineTotal;
       }
     }
 
-    // --- 2. LOYALTY POINTS REDEMPTION ENGINE ---
+    let couponDiscount = 0;
+
+    if (
+      appliedCoupon &&
+      eligibleSubtotal >= Number(appliedCoupon.minOrderAmount)
+    ) {
+      if (appliedCoupon.discountType === "free_shipping") {
+        couponDiscount = 0;
+      } else if (appliedCoupon.discountType === "percentage") {
+        couponDiscount =
+          (eligibleSubtotal * Number(appliedCoupon.discountValue)) / 100;
+        if (
+          appliedCoupon.maxDiscountAmount &&
+          couponDiscount > Number(appliedCoupon.maxDiscountAmount)
+        ) {
+          couponDiscount = Number(appliedCoupon.maxDiscountAmount);
+        }
+      } else {
+        couponDiscount = Math.min(
+          Number(appliedCoupon.discountValue),
+          eligibleSubtotal,
+        );
+      }
+      appliedCoupon.usedCount += 1;
+      await appliedCoupon.save({ transaction });
+    } else if (appliedCoupon) {
+      appliedCoupon = null;
+    }
+
     const customer = await User.findByPk(userId, { transaction });
     let loyaltyDiscount = 0;
-    const requestedPoints = Math.max(0, parseInt(redeemPoints) || 0);
+
+    const requestedPoints =
+      appliedCoupon && !appliedCoupon.isStackable
+        ? 0
+        : Math.max(0, parseInt(redeemPoints) || 0);
 
     if (requestedPoints > 0) {
       const availablePoints = customer.loyaltyPoints || 0;
@@ -122,15 +146,17 @@ export const createOrder = async (req, res) => {
         availablePoints,
         Math.floor(subtotal - couponDiscount),
       );
-      loyaltyDiscount = pointsToRedeem; // 1 point = Rs. 1
+      loyaltyDiscount = pointsToRedeem;
       customer.loyaltyPoints -= pointsToRedeem;
     }
 
-    const deliveryFee = subtotal >= 1000 ? 0 : 100;
+    let deliveryFee = subtotal >= 1000 ? 0 : 100;
+    if (appliedCoupon && appliedCoupon.discountType === "free_shipping")
+      deliveryFee = 0;
+
     const grandTotal =
       Math.max(0, subtotal - couponDiscount - loyaltyDiscount) + deliveryFee;
 
-    // Create the Order
     const order = await Order.create(
       {
         userId,
@@ -148,23 +174,54 @@ export const createOrder = async (req, res) => {
       { transaction },
     );
 
-    // Split order items and compute seller earnings
     let totalLoyaltyPointsEarned = 0;
 
     for (const item of selectedItems) {
       const book = item.Book;
-
       const effectivePrice =
         book.discountPercentage > 0
           ? Number(book.price) * (1 - book.discountPercentage / 100)
           : Number(book.price);
+      let itemTotal = effectivePrice * item.quantity;
+      let itemDiscountShare = 0;
 
-      const itemTotal = effectivePrice * item.quantity;
+      if (
+        appliedCoupon &&
+        appliedCoupon.discountType !== "free_shipping" &&
+        eligibleSubtotal > 0
+      ) {
+        let isEligible = true;
+        if (appliedCoupon.sellerId && book.sellerId !== appliedCoupon.sellerId)
+          isEligible = false;
+        if (
+          appliedCoupon.applicableGenreId &&
+          book.genreId !== appliedCoupon.applicableGenreId
+        )
+          isEligible = false;
+        if (appliedCoupon.excludeDiscountedItems && book.discountPercentage > 0)
+          isEligible = false;
+
+        if (isEligible) {
+          itemDiscountShare = (itemTotal / eligibleSubtotal) * couponDiscount;
+          if (appliedCoupon.sponsor === "seller") {
+            itemTotal -= itemDiscountShare;
+          }
+        }
+      }
 
       const seller = await User.findByPk(book.sellerId, { transaction });
       const commissionRate = seller ? seller.commissionRate : 10.0;
+      let commissionCut = itemTotal * (commissionRate / 100);
 
-      const commissionCut = itemTotal * (commissionRate / 100);
+      if (
+        appliedCoupon &&
+        appliedCoupon.sponsor === "platform" &&
+        itemDiscountShare > 0
+      ) {
+        commissionCut -= itemDiscountShare;
+        if (commissionCut < 0) commissionCut = 0;
+      }
+
       const sellerEarnings = itemTotal - commissionCut;
 
       await OrderItem.create(
@@ -181,20 +238,16 @@ export const createOrder = async (req, res) => {
         { transaction },
       );
 
-      // Deduct stock
       book.stock -= item.quantity;
       await book.save({ transaction });
 
-      // Calculate new loyalty points (1 point per Rs. 100 spent net)
       totalLoyaltyPointsEarned += Math.floor(itemTotal / 100);
     }
 
-    // Award new points
     customer.loyaltyPoints =
       (customer.loyaltyPoints || 0) + totalLoyaltyPointsEarned;
     await customer.save({ transaction });
 
-    // Clean up purchased cart items
     await CartItem.destroy({
       where: { id: { [Op.in]: cartItemIds } },
       transaction,
@@ -215,38 +268,24 @@ export const createOrder = async (req, res) => {
   }
 };
 
-// ==========================================
-// 2. CUSTOMER: GET THEIR OWN ORDER HISTORY
-// ==========================================
 export const getUserOrders = async (req, res) => {
   try {
     const userId = req.user.id;
     const orders = await Order.findAll({
       where: { userId },
-      include: [
-        {
-          model: OrderItem,
-          include: [Book],
-        },
-      ],
+      include: [{ model: OrderItem, include: [Book] }],
       order: [["createdAt", "DESC"]],
     });
     res.status(200).json(orders);
   } catch (error) {
-    console.error("Fetch Orders Error:", error);
     res.status(500).json({ message: "Server error fetching orders" });
   }
 };
 
-// ==========================================
-// 3. ADMIN: GET ALL ORDERS FROM EVERYONE
-// ==========================================
 export const getAllOrders = async (req, res) => {
   try {
-    if (req.user.role !== "admin") {
+    if (req.user.role !== "admin")
       return res.status(403).json({ message: "Not authorized. Admin only." });
-    }
-
     const orders = await Order.findAll({
       include: [
         { model: User, attributes: ["username", "email"] },
@@ -256,32 +295,24 @@ export const getAllOrders = async (req, res) => {
     });
     res.status(200).json(orders);
   } catch (error) {
-    console.error("Admin Fetch Orders Error:", error);
     res.status(500).json({ message: "Server error fetching all orders" });
   }
 };
 
-// ==========================================
-// 4. ADMIN: UPDATE ORDER STATUS & PAYOUT SELLERS
-// ==========================================
 export const updateOrderStatus = async (req, res) => {
   try {
-    if (req.user.role !== "admin") {
+    if (req.user.role !== "admin")
       return res.status(403).json({ message: "Not authorized. Admin only." });
-    }
-
     const { id } = req.params;
     const { orderStatus } = req.body;
 
     const order = await Order.findByPk(id);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // 🔥 THE PAYOUT LEDGER: If order becomes "Delivered", add money to seller wallets!
     if (orderStatus === "Delivered" && order.orderStatus !== "Delivered") {
       const orderItems = await OrderItem.findAll({
         where: { orderId: order.id },
       });
-
       for (const item of orderItems) {
         const seller = await User.findByPk(item.sellerId);
         if (seller) {
@@ -289,59 +320,43 @@ export const updateOrderStatus = async (req, res) => {
             Number(seller.walletBalance) + Number(item.sellerEarnings);
           await seller.save();
         }
-        item.itemStatus = "Delivered"; // Mark individual item as delivered
+        item.itemStatus = "Delivered";
         await item.save();
       }
-
-      if (order.paymentMethod === "COD") {
-        order.paymentStatus = "Paid";
-      }
+      if (order.paymentMethod === "COD") order.paymentStatus = "Paid";
     }
 
     order.orderStatus = orderStatus;
     await order.save();
-
     res
       .status(200)
       .json({ message: "Order status updated successfully!", order });
   } catch (error) {
-    console.error("Update Status Error:", error);
     res.status(500).json({ message: "Server error updating order status" });
   }
 };
 
-// ==========================================
-// 5. ADMIN: GET SINGLE ORDER DETAILS
-// ==========================================
 export const getOrderDetails = async (req, res) => {
   try {
-    if (req.user.role !== "admin") {
+    if (req.user.role !== "admin")
       return res.status(403).json({ message: "Not authorized. Admin only." });
-    }
-
     const order = await Order.findByPk(req.params.id, {
       include: [
         { model: User, attributes: ["username", "email"] },
         { model: OrderItem, include: [Book] },
       ],
     });
-
     if (!order) return res.status(404).json({ message: "Order not found" });
     res.status(200).json(order);
   } catch (error) {
-    console.error("Fetch Order Details Error:", error);
     res.status(500).json({ message: "Server error fetching order details" });
   }
 };
 
-// ==========================================
-// 6. ADMIN: GET DASHBOARD STATS
-// ==========================================
 export const getDashboardStats = async (req, res) => {
   try {
-    if (req.user.role !== "admin") {
+    if (req.user.role !== "admin")
       return res.status(403).json({ message: "Not authorized. Admin only." });
-    }
 
     const totalBooks = await Book.count();
     const lowStockBooks = await Book.count({
@@ -378,9 +393,8 @@ export const getDashboardStats = async (req, res) => {
       const dayData = salesData.find((d) => d.dateString === orderDate);
       if (dayData) {
         dayData.orders += 1;
-        if (order.paymentStatus === "Paid") {
+        if (order.paymentStatus === "Paid")
           dayData.revenue += Number(order.grandTotal);
-        }
       }
     });
 
@@ -407,20 +421,14 @@ export const getDashboardStats = async (req, res) => {
       orderStatusData,
     });
   } catch (error) {
-    console.error("Stats Error:", error);
     res.status(500).json({ message: "Server error fetching stats" });
   }
 };
 
-// ==========================================
-// 7. ADMIN & SELLER: TOGGLE PACKED STATUS
-// ==========================================
 export const toggleItemPackedStatus = async (req, res) => {
   try {
-    // Both Admin and Sellers can pack items!
-    if (req.user.role !== "admin" && req.user.role !== "seller") {
+    if (req.user.role !== "admin" && req.user.role !== "seller")
       return res.status(403).json({ message: "Not authorized." });
-    }
 
     const { orderId, itemId } = req.params;
     const { isPacked } = req.body;
@@ -428,10 +436,8 @@ export const toggleItemPackedStatus = async (req, res) => {
     const orderItem = await OrderItem.findOne({
       where: { id: itemId, orderId: orderId },
     });
-
     if (!orderItem) return res.status(404).json({ message: "Item not found" });
 
-    // Security Check: If it's a seller, they can ONLY pack their own items
     if (req.user.role === "seller" && orderItem.sellerId !== req.user.id) {
       return res
         .status(403)
@@ -440,26 +446,19 @@ export const toggleItemPackedStatus = async (req, res) => {
 
     orderItem.isPacked = isPacked;
     if (isPacked) orderItem.itemStatus = "Packed";
-
     await orderItem.save();
 
     res.status(200).json({ message: "Item packing status updated" });
   } catch (error) {
-    console.error("Toggle Pack Error:", error);
     res.status(500).json({ message: "Server error updating packing status" });
   }
 };
 
-// ==========================================
-// 8. SELLER: GET THEIR SPECIFIC STORE ORDERS
-// ==========================================
 export const getSellerOrders = async (req, res) => {
   try {
-    if (req.user.role !== "seller") {
+    if (req.user.role !== "seller")
       return res.status(403).json({ message: "Not authorized. Sellers only." });
-    }
 
-    // Only fetch OrderItems that belong to THIS seller, but include Parent Order for Customer Details
     const sellerItems = await OrderItem.findAll({
       where: { sellerId: req.user.id },
       include: [
@@ -483,43 +482,32 @@ export const getSellerOrders = async (req, res) => {
 
     res.status(200).json(sellerItems);
   } catch (error) {
-    console.error("Seller Orders Error:", error);
     res.status(500).json({ message: "Server error fetching seller orders" });
   }
 };
-// ==========================================
-// 9. SELLER: GET WALLET & EARNINGS STATS
-// ==========================================
+
 export const getSellerWalletStats = async (req, res) => {
   try {
-    if (req.user.role !== "seller") {
+    if (req.user.role !== "seller")
       return res.status(403).json({ message: "Not authorized. Sellers only." });
-    }
 
     const sellerId = req.user.id;
-
-    // Fetch the seller to get their current actual wallet balance
     const seller = await User.findByPk(sellerId);
+    const allItems = await OrderItem.findAll({ where: { sellerId } });
 
-    // Get all items sold by this seller
-    const allItems = await OrderItem.findAll({
-      where: { sellerId },
-    });
-
-    // Calculate Lifetime Earnings (Only from Delivered Items)
     const lifetimeEarnings = allItems
       .filter((item) => item.itemStatus === "Delivered")
       .reduce((sum, item) => sum + Number(item.sellerEarnings), 0);
-
-    // Calculate Platform Fees Paid (Only from Delivered Items)
     const lifetimeCommission = allItems
       .filter((item) => item.itemStatus === "Delivered")
       .reduce((sum, item) => sum + Number(item.commissionCut), 0);
-
-    // Calculate Pending Value (Orders placed but not yet delivered)
     const pendingValue = allItems
       .filter((item) => item.itemStatus !== "Delivered")
       .reduce((sum, item) => sum + Number(item.sellerEarnings), 0);
+    const payouts = await Payout.findAll({
+      where: { sellerId },
+      order: [["createdAt", "DESC"]],
+    });
 
     res.status(200).json({
       currentBalance: Number(seller.walletBalance) || 0,
@@ -527,15 +515,13 @@ export const getSellerWalletStats = async (req, res) => {
       lifetimeCommission,
       pendingValue,
       commissionRate: seller.commissionRate,
+      payoutHistory: payouts,
     });
   } catch (error) {
-    console.error("Wallet Stats Error:", error);
     res.status(500).json({ message: "Server error fetching wallet stats" });
   }
 };
-// ==========================================
-// 10. GENERATE PDF INVOICE
-// ==========================================
+
 export const generateInvoice = async (req, res) => {
   try {
     const order = await Order.findByPk(req.params.id, {
@@ -547,28 +533,27 @@ export const generateInvoice = async (req, res) => {
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // Security: Only Admins or the Customer who placed the order can download it
-    if (req.user.role !== "admin" && req.user.id !== order.userId) {
+    // 🔥 NEW: Allow Admins, the Customer, OR a Seller who has an item in this order
+    const isCustomer = req.user.id === order.userId;
+    const isAdmin = req.user.role === "admin";
+    const isSellerForOrder = order.OrderItems.some(
+      (item) => item.sellerId === req.user.id,
+    );
+
+    if (!isAdmin && !isCustomer && !isSellerForOrder) {
       return res
         .status(403)
         .json({ message: "Not authorized to view this invoice." });
     }
 
-    // Initialize PDF Document
     const doc = new PDFDocument({ margin: 50, size: "A4" });
-
-    // Set headers to trigger a file download in the browser
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
       `attachment; filename=Invoice-${order.id}.pdf`,
     );
-
-    // Pipe the PDF directly to the Express response
     doc.pipe(res);
 
-    // --- PDF LAYOUT & STYLING ---
-    // Header
     doc
       .fontSize(24)
       .font("Helvetica-Bold")
@@ -579,7 +564,6 @@ export const generateInvoice = async (req, res) => {
       .text("Official Marketplace Receipt", { align: "left" });
     doc.moveDown(2);
 
-    // Order Info
     doc.fontSize(12).font("Helvetica-Bold").text("INVOICE DETAILS");
     doc.font("Helvetica").text(`Order ID: #${order.id}`);
     doc.text(`Date: ${new Date(order.createdAt).toLocaleString()}`);
@@ -587,7 +571,6 @@ export const generateInvoice = async (req, res) => {
     doc.text(`Status: ${order.paymentStatus}`);
     doc.moveDown();
 
-    // Customer Info
     doc.font("Helvetica-Bold").text("BILLED TO");
     doc.font("Helvetica").text(order.fullName);
     doc.text(`${order.address}, ${order.city}`);
@@ -595,21 +578,18 @@ export const generateInvoice = async (req, res) => {
     doc.text(`Email: ${order.User?.email}`);
     doc.moveDown(2);
 
-    // Table Headers
     const tableTop = doc.y;
     doc.font("Helvetica-Bold");
     doc.text("Item Title", 50, tableTop);
     doc.text("Qty", 350, tableTop, { width: 50, align: "center" });
     doc.text("Unit Price", 400, tableTop, { width: 70, align: "right" });
     doc.text("Total", 470, tableTop, { width: 70, align: "right" });
-
     doc
       .moveTo(50, tableTop + 15)
       .lineTo(540, tableTop + 15)
       .stroke();
-    let position = tableTop + 25;
 
-    // Table Rows
+    let position = tableTop + 25;
     doc.font("Helvetica");
     order.OrderItems.forEach((item) => {
       const lineTotal = Number(item.priceAtPurchase) * item.quantity;
@@ -633,46 +613,150 @@ export const generateInvoice = async (req, res) => {
       position += 20;
     });
 
-    // Totals Section
     doc
       .moveTo(50, position + 10)
       .lineTo(540, position + 10)
       .stroke();
     position += 25;
 
-    doc.font("Helvetica-Bold");
-    doc.text("Delivery Fee:", 350, position, { width: 120, align: "right" });
-    doc
-      .font("Helvetica")
-      .text(`Rs. ${Number(order.deliveryFee).toFixed(2)}`, 470, position, {
-        width: 70,
-        align: "right",
-      });
+    const subtotal = Number(order.totalAmount);
+    const deliveryFee = Number(order.deliveryFee);
+    const grandTotal = Number(order.grandTotal);
+    const totalDiscount = subtotal + deliveryFee - grandTotal;
+
+    doc.font("Helvetica-Bold").fillColor("black");
+    doc.text("Subtotal:", 350, position, { width: 120, align: "right" });
+    doc.font("Helvetica").text(`Rs. ${subtotal.toFixed(2)}`, 470, position, {
+      width: 70,
+      align: "right",
+    });
     position += 20;
 
     doc.font("Helvetica-Bold");
-    doc.text("Grand Total:", 350, position, { width: 120, align: "right" });
-    doc
-      .fillColor("green")
-      .text(`Rs. ${Number(order.grandTotal).toFixed(2)}`, 470, position, {
-        width: 70,
+    doc.text("Delivery Fee:", 350, position, { width: 120, align: "right" });
+    doc.font("Helvetica").text(`Rs. ${deliveryFee.toFixed(2)}`, 470, position, {
+      width: 70,
+      align: "right",
+    });
+    position += 20;
+
+    if (totalDiscount > 0) {
+      doc.font("Helvetica-Bold").fillColor("red");
+      doc.text("Discounts Applied:", 350, position, {
+        width: 120,
         align: "right",
       });
+      doc
+        .font("Helvetica")
+        .text(`- Rs. ${totalDiscount.toFixed(2)}`, 470, position, {
+          width: 70,
+          align: "right",
+        });
+      position += 20;
+    }
 
-    // Footer
+    doc.font("Helvetica-Bold").fillColor("black");
+    doc.text("Grand Total:", 350, position, { width: 120, align: "right" });
+    doc.fillColor("green").text(`Rs. ${grandTotal.toFixed(2)}`, 470, position, {
+      width: 70,
+      align: "right",
+    });
+
     doc.moveDown(4);
     doc
       .fillColor("black")
       .font("Helvetica-Oblique")
       .fontSize(10)
       .text("Thank you for shopping with LibraryMS!", { align: "center" });
-
-    // Finalize PDF file
     doc.end();
   } catch (error) {
-    console.error("Invoice Error:", error);
-    if (!res.headersSent) {
+    if (!res.headersSent)
       res.status(500).json({ message: "Failed to generate invoice" });
+  }
+};
+export const getCustomerDashboardStats = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findByPk(userId);
+
+    const orderItems = await OrderItem.findAll({
+      include: [
+        { model: Order, where: { userId }, attributes: [] },
+        { model: Book, include: [{ model: Genre }] },
+      ],
+    });
+
+    const genreCounts = {};
+    const purchasedBooks = [];
+    let totalBooksRead = 0;
+
+    orderItems.forEach((item) => {
+      if (item.Book) {
+        totalBooksRead += item.quantity;
+        const genreName = item.Book.Genre?.name || "Uncategorized";
+        genreCounts[genreName] = (genreCounts[genreName] || 0) + item.quantity;
+        if (!purchasedBooks.find((b) => b.id === item.Book.id))
+          purchasedBooks.push(item.Book);
+      }
+    });
+
+    const readingDNA = Object.keys(genreCounts)
+      .map((genre) => ({
+        genre,
+        count: genreCounts[genre],
+        percentage: Math.round((genreCounts[genre] / totalBooksRead) * 100),
+      }))
+      .sort((a, b) => b.percentage - a.percentage);
+
+    const points = user.loyaltyPoints || 0;
+    let tier = {
+      name: "Novice Reader",
+      color: "linear-gradient(135deg, #b87333, #e29b68)",
+      nextLimit: 500,
+      icon: "🥉",
+    };
+    if (points >= 500 && points < 2000)
+      tier = {
+        name: "Avid Scholar",
+        color: "linear-gradient(135deg, #9ca3af, #f3f4f6)",
+        nextLimit: 2000,
+        icon: "🥈",
+      };
+    else if (points >= 2000)
+      tier = {
+        name: "Library Grandmaster",
+        color: "linear-gradient(135deg, #fbbf24, #fef08a)",
+        nextLimit: 5000,
+        icon: "👑",
+      };
+
+    // ... existing code inside getCustomerDashboardStats ...
+    const topGenre = readingDNA.length > 0 ? readingDNA[0].genre : null;
+
+    // 🔥 NEW: Fetch the latest active welcome coupon created by the Admin
+    let welcomeCoupon = await Coupon.findOne({
+      where: { isFirstOrderOnly: true, isActive: true, sponsor: "platform" },
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Fallback just in case there isn't a specific "First Order" one, grab any active platform coupon
+    if (!welcomeCoupon) {
+      welcomeCoupon = await Coupon.findOne({
+        where: { isActive: true, sponsor: "platform" },
+        order: [["createdAt", "DESC"]],
+      });
     }
+
+    res.status(200).json({
+      loyaltyPoints: points,
+      tier,
+      readingDNA,
+      totalBooksRead,
+      topGenre,
+      bookshelf: purchasedBooks.slice(0, 12),
+      welcomeCoupon, // <-- Pass the coupon to the frontend
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load dashboard stats" });
   }
 };

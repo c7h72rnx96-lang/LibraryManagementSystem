@@ -17,7 +17,11 @@ import {
   FaTimes,
   FaStore,
   FaWallet,
-  FaFileCsv, // <-- 1. IMPORT FaFileCsv HERE
+  FaFileCsv,
+  FaTicketAlt,
+  FaMoneyCheckAlt,
+  FaShieldAlt,
+  FaHeadset, // <-- Added Headset icon
 } from "react-icons/fa";
 
 const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
@@ -258,6 +262,19 @@ const WorkspaceLayout = () => {
                     <FaClipboardList className="me-3 fs-5" /> Store Orders
                   </Link>
                 </li>
+                {/* 🔥 NEW: Store Inbox added to Seller sidebar */}
+                <li className="nav-item">
+                  <Link
+                    to="/support"
+                    className={linkClass("/support")}
+                    style={
+                      location.pathname.includes("/support") ? activeStyle : {}
+                    }
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <FaHeadset className="me-3 fs-5 text-info" /> Store Inbox
+                  </Link>
+                </li>
                 <li className="nav-item">
                   <Link
                     to="/books"
@@ -288,7 +305,6 @@ const WorkspaceLayout = () => {
                     <FaBoxOpen className="me-3 fs-5" /> Publish New Book
                   </Link>
                 </li>
-                {/* 🔥 2. ADDED BULK UPLOAD TO SELLER MENU */}
                 <li className="nav-item">
                   <Link
                     to="/books/bulk"
@@ -344,7 +360,6 @@ const WorkspaceLayout = () => {
                     <FaBook className="me-3 fs-5" /> All Books
                   </Link>
                 </li>
-                {/* 🔥 3. ADDED BULK UPLOAD TO ADMIN MENU */}
                 <li className="nav-item">
                   <Link
                     to="/books/bulk"
@@ -357,6 +372,18 @@ const WorkspaceLayout = () => {
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <FaFileCsv className="me-3 fs-5" /> Bulk CSV Upload
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <Link
+                    to="/coupons"
+                    className={linkClass("/coupons")}
+                    style={
+                      location.pathname.includes("/coupons") ? activeStyle : {}
+                    }
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <FaTicketAlt className="me-3 fs-5" /> Promo Codes
                   </Link>
                 </li>
                 <li className="nav-item">
@@ -417,6 +444,47 @@ const WorkspaceLayout = () => {
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <FaUserCircle className="me-3 fs-5" /> User Management
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <Link
+                    to="/admin/payouts"
+                    className={linkClass("/admin/payouts")}
+                    style={
+                      location.pathname.includes("/admin/payouts")
+                        ? activeStyle
+                        : {}
+                    }
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <FaMoneyCheckAlt className="me-3 fs-5" /> Seller Payouts
+                  </Link>
+                </li>
+                {/* 🔥 NEW: Platform Support Desk added to Admin sidebar */}
+                <li className="nav-item">
+                  <Link
+                    to="/support"
+                    className={linkClass("/support")}
+                    style={
+                      location.pathname.includes("/support") ? activeStyle : {}
+                    }
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <FaHeadset className="me-3 fs-5 text-info" /> Support Desk
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <Link
+                    to="/admin/logs"
+                    className={linkClass("/admin/logs")}
+                    style={
+                      location.pathname.includes("/admin/logs")
+                        ? activeStyle
+                        : {}
+                    }
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <FaShieldAlt className="me-3 fs-5" /> System Audit Logs
                   </Link>
                 </li>
               </ul>

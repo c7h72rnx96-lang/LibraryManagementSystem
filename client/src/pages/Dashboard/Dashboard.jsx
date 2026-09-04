@@ -18,6 +18,8 @@ import {
   FaEdit,
   FaCheck,
   FaPlus,
+  FaCoins,
+  FaStore, // <-- ADDED FaStore
 } from "react-icons/fa";
 import {
   LineChart,
@@ -61,7 +63,7 @@ const Dashboard = () => {
         JSON.parse(localStorage.getItem(`pages_${user.id}`)) || {};
       setReadingProgress(savedProgress);
       setPageInputs(savedPages);
-      fetchCustomerData(); // Note: Sellers also see the customer view on their dashboard below their stats!
+      fetchCustomerData();
     } else {
       setLoading(false);
     }
@@ -424,12 +426,23 @@ const Dashboard = () => {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => navigate("/books")}
-                className="btn btn-outline-light w-100 fw-bold mt-auto py-2"
-              >
-                View My Books
-              </button>
+
+              {/* 🔥 SPLIT BUTTONS ADDED HERE */}
+              <div className="d-flex gap-2 mt-auto">
+                <button
+                  onClick={() => navigate("/seller/books")}
+                  className="btn btn-outline-light w-50 fw-bold py-2"
+                >
+                  Manage Books
+                </button>
+                <button
+                  onClick={() => navigate(`/store/${user.id}`)}
+                  className="btn btn-info w-50 fw-bold py-2 text-dark"
+                >
+                  <FaStore className="me-2" /> My Store
+                </button>
+              </div>
+              {/* 🔥 END SPLIT BUTTONS */}
             </div>
           </div>
         </div>
@@ -438,16 +451,15 @@ const Dashboard = () => {
   }
 
   // =======================================
-  // 3. CUSTOMER DASHBOARD UI (Sellers see this below their panel too!)
+  // 3. CUSTOMER DASHBOARD UI
   // =======================================
   const purchasedBooks = orders.flatMap((order) =>
     order.OrderItems.map((item) => item.Book),
   );
+
   const uniquePurchasedBooks = Array.from(
     new Set(purchasedBooks.map((b) => b.id)),
-  )
-    .map((id) => purchasedBooks.find((b) => b.id === id))
-    .slice(0, 3);
+  ).map((id) => purchasedBooks.find((b) => b.id === id));
 
   const getAura = () => {
     const auras = [
@@ -529,7 +541,7 @@ const Dashboard = () => {
         </div>
 
         <div
-          className="px-5 py-3 d-flex gap-5"
+          className="px-5 py-3 d-flex gap-5 flex-wrap"
           style={{
             background: "rgba(0,0,0,0.2)",
             borderTop: "1px solid rgba(255,255,255,0.1)",
@@ -557,6 +569,18 @@ const Dashboard = () => {
             <span className="fs-4 fw-bold">
               <FaHeart className="me-2 text-danger" />
               {wishlistCount} Saved
+            </span>
+          </div>
+          <div>
+            <span
+              className="d-block text-uppercase small fw-bold opacity-75"
+              style={{ fontSize: "11px", letterSpacing: "1px" }}
+            >
+              Loyalty Points
+            </span>
+            <span className="fs-4 fw-bold">
+              <FaCoins className="me-2 text-warning" />
+              {user?.loyaltyPoints || 0} Earned
             </span>
           </div>
         </div>

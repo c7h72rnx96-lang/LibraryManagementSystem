@@ -1,11 +1,9 @@
-// === src/pages/Storefront/Storefront.jsx ===
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import { FaStore, FaBook, FaArrowLeft, FaStar } from "react-icons/fa";
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
+const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
 
 const Storefront = () => {
   const { sellerId } = useParams();
@@ -19,16 +17,14 @@ const Storefront = () => {
   useEffect(() => {
     const fetchStoreData = async () => {
       try {
-        const booksRes = await axios.get(`${API_URL}/books`);
-
-        // Filter books for this specific seller
-        const sellerBooks = booksRes.data.filter(
-          (book) => String(book.sellerId) === String(sellerId),
-        );
+        // Because of our backend upgrade in Phase 5, passing sellerId automatically filters the books!
+        const response = await axiosInstance.get("/books", {
+          params: { sellerId },
+        });
+        const sellerBooks = response.data || [];
 
         setStoreBooks(sellerBooks);
 
-        // Try to get the store name/description from the first book's seller object
         if (sellerBooks.length > 0 && sellerBooks[0].Seller) {
           setStoreName(
             sellerBooks[0].Seller.storeName ||
@@ -49,17 +45,8 @@ const Storefront = () => {
     fetchStoreData();
   }, [sellerId]);
 
-  if (loading) {
-    return (
-      <div className="text-center mt-5">
-        <div className="spinner-border text-info"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="container-fluid mt-2 mb-5 px-lg-5">
-      {/* 🚀 CUSTOM ANIMATIONS & STYLES 🚀 */}
       <style>{`
         .hover-scale { transition: all 0.3s ease; }
         .hover-scale:hover { transform: translateY(-8px); box-shadow: 0 20px 40px rgba(0,0,0,0.4) !important; border-color: rgba(56, 189, 248, 0.4) !important; }
@@ -69,15 +56,15 @@ const Storefront = () => {
           70% { box-shadow: 0 0 20px 15px rgba(56, 189, 248, 0); }
           100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
         }
-        .shimmer-text {
-          background: linear-gradient(90deg, #38bdf8 0%, #e879f9 50%, #38bdf8 100%);
-          background-size: 200% auto;
-          color: transparent;
-          -webkit-background-clip: text;
-          background-clip: text;
-          animation: shimmer 3s linear infinite;
+        @keyframes pulse {
+          0% { background-color: rgba(255,255,255,0.05); }
+          50% { background-color: rgba(255,255,255,0.15); }
+          100% { background-color: rgba(255,255,255,0.05); }
         }
-        @keyframes shimmer { to { background-position: 200% center; } }
+        .skeleton-box {
+          animation: pulse 1.5s infinite ease-in-out;
+          border-radius: 8px;
+        }
       `}</style>
 
       <button
@@ -88,7 +75,7 @@ const Storefront = () => {
         <FaArrowLeft className="me-2" /> Back to Marketplace
       </button>
 
-      {/* 🔮 PREMIUM HERO BANNER */}
+      {/* HERO BANNER */}
       <div
         className="card border-0 mb-5 rounded-4 overflow-hidden text-white position-relative"
         style={{
@@ -96,7 +83,6 @@ const Storefront = () => {
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
         }}
       >
-        {/* Background Glow Orbs */}
         <div
           className="position-absolute top-0 start-0 w-50 h-100 bg-info opacity-25"
           style={{ filter: "blur(100px)", transform: "translate(-20%, -20%)" }}
@@ -120,16 +106,30 @@ const Storefront = () => {
             <FaStore size={40} className="text-info" />
           </div>
 
-          <h1 className="fw-bold display-4 mb-2 tracking-wide text-white">
-            {storeName}
-          </h1>
+          {loading ? (
+            <div
+              className="skeleton-box mb-3"
+              style={{ height: "40px", width: "300px" }}
+            ></div>
+          ) : (
+            <h1 className="fw-bold display-4 mb-2 tracking-wide text-white">
+              {storeName}
+            </h1>
+          )}
 
-          <p
-            className="fs-6 opacity-75 mb-4 fw-light"
-            style={{ maxWidth: "600px", lineHeight: "1.6" }}
-          >
-            {storeDescription}
-          </p>
+          {loading ? (
+            <div
+              className="skeleton-box mb-4"
+              style={{ height: "20px", width: "400px" }}
+            ></div>
+          ) : (
+            <p
+              className="fs-6 opacity-75 mb-4 fw-light"
+              style={{ maxWidth: "600px", lineHeight: "1.6" }}
+            >
+              {storeDescription}
+            </p>
+          )}
 
           <span
             className="badge rounded-pill fw-bold shadow-sm d-flex align-items-center gap-2"
@@ -141,16 +141,40 @@ const Storefront = () => {
               fontSize: "14px",
             }}
           >
-            <FaBook className="text-info" /> {storeBooks.length} Books in
-            Library
+            <FaBook className="text-info" />{" "}
+            {loading ? "..." : storeBooks.length} Books in Library
             <span className="text-muted mx-1">|</span>
             <FaStar className="text-warning" /> 5.0 Rated Seller
           </span>
         </div>
       </div>
 
-      {/* 📚 STORE BOOK GRID */}
-      {storeBooks.length === 0 ? (
+      {/* STORE BOOK GRID */}
+      {loading ? (
+        <div className="row g-4">
+          {[...Array(4)].map((_, index) => (
+            <div key={index} className="col-6 col-md-4 col-xl-3">
+              <div
+                className="card h-100 shadow-sm border-0 position-relative p-3"
+                style={{ background: "rgba(15, 23, 42, 0.4)" }}
+              >
+                <div
+                  className="skeleton-box mb-3"
+                  style={{ height: "260px", width: "100%" }}
+                ></div>
+                <div
+                  className="skeleton-box mb-2"
+                  style={{ height: "20px", width: "80%" }}
+                ></div>
+                <div
+                  className="skeleton-box mt-auto"
+                  style={{ height: "30px", width: "50%" }}
+                ></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : storeBooks.length === 0 ? (
         <div
           className="text-center p-5 rounded-4 shadow-sm"
           style={{
@@ -185,7 +209,6 @@ const Storefront = () => {
                   onClick={() => navigate(`/books/${book.id}`)}
                 >
                   <div className="position-relative bg-light">
-                    {/* Discount Badge */}
                     {hasDiscount && (
                       <div
                         className="position-absolute top-0 start-0 m-2 badge bg-danger shadow-sm rounded-pill px-2 py-1 z-2"
@@ -195,7 +218,6 @@ const Storefront = () => {
                       </div>
                     )}
 
-                    {/* Book Cover */}
                     <img
                       src={
                         book.image?.startsWith("http")

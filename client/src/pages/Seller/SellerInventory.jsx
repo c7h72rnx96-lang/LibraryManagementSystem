@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useContext } from "react";
 import { Link } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import { AuthContext } from "../../context/AuthContext.jsx";
 import { FaEdit, FaTrash, FaPlus, FaBoxOpen } from "react-icons/fa";
 import toast from "react-hot-toast";
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
+const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
 
 const SellerInventory = () => {
   const { user } = useContext(AuthContext);
@@ -19,14 +18,13 @@ const SellerInventory = () => {
 
   const fetchMyBooks = async () => {
     try {
-      const response = await axios.get(`${API_URL}/books`);
-      // Filter books so the seller ONLY sees their own uploaded books
-      const filteredBooks = response.data.filter(
-        (book) => String(book.sellerId) === String(user.id),
-      );
-      setMyBooks(filteredBooks);
+      // Passes the sellerId directly so the backend filters it for us
+      const response = await axiosInstance.get("/books", {
+        params: { sellerId: user.id },
+      });
+      setMyBooks(response.data);
     } catch (error) {
-      toast.error("Failed to load your inventory.");
+      toast.error(error.message || "Failed to load your inventory.");
     } finally {
       setLoading(false);
     }
@@ -41,14 +39,11 @@ const SellerInventory = () => {
       return;
 
     try {
-      const token = sessionStorage.getItem("token");
-      await axios.delete(`${API_URL}/books/${bookId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axiosInstance.delete(`/books/${bookId}`);
       toast.success("Book deleted successfully.");
       setMyBooks(myBooks.filter((b) => b.id !== bookId));
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to delete book.");
+      toast.error(error.message || "Failed to delete book.");
     }
   };
 

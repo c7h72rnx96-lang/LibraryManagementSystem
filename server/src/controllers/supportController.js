@@ -1,127 +1,63 @@
-// === src/controllers/supportController.js ===
-import { SupportTicket, SupportMessage, User } from "../models/index.js";
+import { SupportService } from "../services/SupportService.js";
 
-export const createTicket = async (req, res) => {
+export const createTicket = async (req, res, next) => {
   try {
-    const { subject, message } = req.body;
-    const userId = req.user.id;
-
-    const ticket = await SupportTicket.create({
-      subject,
-      userId,
-      status: "Open",
-    });
-
-    await SupportMessage.create({
-      ticketId: ticket.id,
-      senderId: userId,
-      message,
-    });
-
-    res.status(201).json(ticket);
+    const result = await SupportService.createTicket(
+      req.user.id,
+      req.body.subject,
+      req.body.message,
+    );
+    res.status(201).json(result);
   } catch (error) {
-    res.status(500).json({ message: "Failed to create support ticket." });
+    next(error);
   }
 };
 
-export const getAllTickets = async (req, res) => {
+export const getAllTickets = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const role = req.user.role;
-
-    const whereClause = role === "admin" ? {} : { userId: userId };
-
-    const tickets = await SupportTicket.findAll({
-      where: whereClause,
-      include: [
-        {
-          model: User,
-          as: "Customer",
-          attributes: ["username", "avatar", "email", "role"],
-        },
-      ],
-      order: [["updatedAt", "DESC"]],
-    });
-    res.status(200).json(tickets);
+    const result = await SupportService.getTickets(req.user.id, req.user.role);
+    res.status(200).json(result);
   } catch (error) {
-    res.status(500).json({ message: "Failed to load tickets." });
+    next(error);
   }
 };
 
-export const getTicketMessages = async (req, res) => {
+export const getTicketMessages = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const ticket = await SupportTicket.findByPk(id);
-    if (!ticket) return res.status(404).json({ message: "Ticket not found." });
-
-    if (req.user.role !== "admin" && req.user.id !== ticket.userId) {
-      return res
-        .status(403)
-        .json({ message: "Unauthorized access to ticket." });
-    }
-
-    const messages = await SupportMessage.findAll({
-      where: { ticketId: id },
-      include: [
-        {
-          model: User,
-          as: "Sender",
-          attributes: ["id", "username", "avatar", "role"],
-        },
-      ],
-      order: [["createdAt", "ASC"]],
-    });
-
-    res.status(200).json({ ticket, messages });
+    const result = await SupportService.getMessages(
+      req.user.id,
+      req.user.role,
+      req.params.id,
+    );
+    res.status(200).json(result);
   } catch (error) {
-    res.status(500).json({ message: "Failed to load ticket messages." });
+    next(error);
   }
 };
 
-export const sendMessage = async (req, res) => {
+export const sendMessage = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const { message } = req.body;
-    const ticket = await SupportTicket.findByPk(id);
-
-    if (!ticket) return res.status(404).json({ message: "Ticket not found." });
-    if (ticket.status === "Closed")
-      return res.status(400).json({ message: "Ticket is closed." });
-
-    const newMessage = await SupportMessage.create({
-      ticketId: id,
-      senderId: req.user.id,
-      message,
-    });
-
-    ticket.changed("updatedAt", true);
-    await ticket.save();
-
-    const populatedMessage = await SupportMessage.findByPk(newMessage.id, {
-      include: [
-        {
-          model: User,
-          as: "Sender",
-          attributes: ["id", "username", "avatar", "role"],
-        },
-      ],
-    });
-
-    res.status(201).json(populatedMessage);
+    const result = await SupportService.replyToTicket(
+      req.user.id,
+      req.user.role,
+      req.params.id,
+      req.body.message,
+    );
+    res.status(201).json(result);
   } catch (error) {
-    res.status(500).json({ message: "Failed to send ticket reply." });
+    next(error);
   }
 };
 
-export const closeTicket = async (req, res) => {
+export const closeTicket = async (req, res, next) => {
   try {
-    const ticket = await SupportTicket.findByPk(req.params.id);
-    if (!ticket) return res.status(404).json({ message: "Ticket not found." });
-
-    ticket.status = "Closed";
-    await ticket.save();
-    res.status(200).json({ message: "Ticket marked as resolved." });
+    const result = await SupportService.closeTicket(
+      req.user.id,
+      req.user.role,
+      req.params.id,
+    );
+    res.status(200).json(result);
   } catch (error) {
-    res.status(500).json({ message: "Failed to close ticket." });
+    next(error);
   }
 };

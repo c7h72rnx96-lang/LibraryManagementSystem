@@ -12,6 +12,7 @@ const Order = sequelize.define(
       allowNull: false,
       defaultValue: 0,
     },
+
     grandTotal: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
 
     // Shipping Details
@@ -40,6 +41,11 @@ const Order = sequelize.define(
   {
     tableName: "orders",
     timestamps: true,
+    indexes: [
+      { fields: ["userId"] },
+      { fields: ["orderStatus"] },
+      { fields: ["createdAt"] },
+    ],
   },
 );
 

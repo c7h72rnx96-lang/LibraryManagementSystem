@@ -1,7 +1,10 @@
 // === src/pages/Support/CustomerSupport.jsx ===
 import React, { useState, useEffect, useContext, useRef } from "react";
-import axios from "axios";
-import { io } from "socket.io-client";
+import axiosInstance from "../../utils/axiosInstance.js";
+import { SocketContext } from "../../context/SocketContext.jsx";
+import { AuthContext } from "../../context/AuthContext.jsx";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../constants/queryKeys.js";
 import {
   FaHeadset,
   FaPaperPlane,
@@ -18,259 +21,218 @@ import {
   FaTicketAlt,
   FaPlus,
   FaArrowLeft,
+  FaCircle,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
-import { AuthContext } from "../../context/AuthContext.jsx";
-
-const API_URL = import.meta.env.VITE_API_URL;
-const SOCKET_URL = import.meta.env.VITE_API_URL.replace("/api", "");
 
 const CustomerSupport = () => {
   const { user } = useContext(AuthContext);
+  const { socket, onlineUsers } = useContext(SocketContext);
   const isAdmin = user?.role === "admin";
+  const queryClient = useQueryClient();
 
-  // TABS: 'contact', 'create_ticket', 'view_tickets', 'live_chat'
   const [activeTab, setActiveTab] = useState(
     isAdmin ? "view_tickets" : "contact",
   );
-
-  // FORMAL TICKET STATE
-  const [tickets, setTickets] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [newTicketData, setNewTicketData] = useState({
     subject: "",
     message: "",
   });
-  const [ticketReplies, setTicketReplies] = useState([]);
   const [ticketReplyText, setTicketReplyText] = useState("");
 
-  // REAL-TIME CHAT STATE
-  const [socket, setSocket] = useState(null);
-  const [conversations, setConversations] = useState([]);
   const [chatPartner, setChatPartner] = useState(null);
-  const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
-  const [contactList, setContactList] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [isTyping, setIsTyping] = useState(false);
+  const [sendingMessageId, setSendingMessageId] = useState(null);
 
-  // SCROLL REFS
   const messagesEndRef = useRef(null);
-  const chatScrollRef = useRef(null);
   const ticketScrollRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
+  // Clear session storage on unmount to stop notifications blocking
   useEffect(() => {
-    if (!user) return;
-
-    const token = sessionStorage.getItem("token");
-    const newSocket = io(SOCKET_URL, { auth: { token } });
-    setSocket(newSocket);
-
-    newSocket.on("receive_message", (message) => {
-      // If the message belongs to our currently open chat window, append it
-      setChatMessages((prev) => {
-        return [...prev, message];
-      });
-      setTimeout(
-        () => chatScrollRef.current?.scrollIntoView({ behavior: "smooth" }),
-        100,
-      );
-    });
-
-    newSocket.on("message_sent", (message) => {
-      setChatMessages((prev) => {
-        // Prevent duplicate append if message already exists
-        if (prev.some((m) => m.id === message.id)) return prev;
-        return [...prev, message];
-      });
-      setTimeout(
-        () => chatScrollRef.current?.scrollIntoView({ behavior: "smooth" }),
-        100,
-      );
-    });
-
-    fetchTickets();
-    fetchConversations();
-
-    return () => newSocket.disconnect();
-  }, [user]);
-
-  // Ticket background polling for active ticket view
-  useEffect(() => {
-    let interval;
-    if (
-      activeTab === "view_tickets" &&
-      selectedTicket &&
-      selectedTicket.status !== "Closed"
-    ) {
-      interval = setInterval(async () => {
-        try {
-          const res = await axios.get(
-            `${API_URL}/support/${selectedTicket.id}/messages`,
-            {
-              headers: {
-                Authorization: `Bearer ${sessionStorage.getItem("token")}`,
-              },
-            },
-          );
-          setTicketReplies((prev) => {
-            if (prev.length !== res.data.messages.length) {
-              setTimeout(
-                () =>
-                  ticketScrollRef.current?.scrollIntoView({
-                    behavior: "smooth",
-                  }),
-                100,
-              );
-              return res.data.messages;
-            }
-            return prev;
-          });
-        } catch (err) {}
-      }, 3000);
-    }
-    return () => clearInterval(interval);
-  }, [activeTab, selectedTicket]);
+    return () => sessionStorage.removeItem("activeChatPartner");
+  }, []);
 
   // ==========================================
-  // TICKET ACTIONS
+  // 1. TANSTACK QUERY: SERVER STATE
   // ==========================================
-  const fetchTickets = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/support/tickets`, {
-        headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` },
-      });
-      setTickets(res.data);
-    } catch (err) {
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const submitFormalTicket = async (e) => {
-    e.preventDefault();
-    if (!newTicketData.subject || !newTicketData.message) return;
-    try {
-      await axios.post(`${API_URL}/support`, newTicketData, {
-        headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` },
-      });
+  // TICKETS
+  const { data: tickets = [], isLoading: loadingTickets } = useQuery({
+    queryKey: queryKeys.support.tickets,
+    queryFn: async () => (await axiosInstance.get("/support/tickets")).data,
+  });
+
+  const { data: ticketReplies = [], isLoading: loadingReplies } = useQuery({
+    queryKey: queryKeys.support.ticketMessages(selectedTicket?.id),
+    queryFn: async () => {
+      const res = await axiosInstance.get(
+        `/support/${selectedTicket.id}/messages`,
+      );
+      setTimeout(
+        () => ticketScrollRef.current?.scrollIntoView({ behavior: "smooth" }),
+        100,
+      );
+      return res.data.messages;
+    },
+    enabled: !!selectedTicket,
+  });
+
+  // CHATS
+  const { data: chatMessages = [] } = useQuery({
+    queryKey: ["chat", chatPartner?.id],
+    queryFn: async () => {
+      if (!chatPartner || chatPartner === "NEW") return [];
+      const res = await axiosInstance.get(`/chat/history/${chatPartner.id}`);
+      setTimeout(
+        () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }),
+        100,
+      );
+      return res.data;
+    },
+    enabled: !!chatPartner && chatPartner !== "NEW",
+  });
+
+  const { data: contactList = [] } = useQuery({
+    queryKey: ["chatPartners"],
+    queryFn: async () => (await axiosInstance.get("/chat/partners")).data,
+    enabled: chatPartner === "NEW",
+  });
+
+  const { data: conversations = [] } = useQuery({
+    queryKey: ["chatConversations"],
+    queryFn: async () => (await axiosInstance.get("/chat/conversations")).data,
+    enabled: activeTab === "live_chat",
+  });
+
+  // ==========================================
+  // 2. TANSTACK MUTATIONS: TICKETS
+  // ==========================================
+  const submitTicketMutation = useMutation({
+    mutationFn: async (ticketData) =>
+      axiosInstance.post("/support", ticketData),
+    onSuccess: () => {
       toast.success("Support Ticket Submitted!");
       setNewTicketData({ subject: "", message: "" });
-      fetchTickets();
       setActiveTab("view_tickets");
-    } catch (err) {
-      toast.error("Failed to submit ticket.");
-    }
-  };
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.tickets });
+    },
+    onError: (err) => toast.error(err.message || "Failed to submit ticket."),
+  });
 
-  const openTicketDetails = async (ticket) => {
-    setSelectedTicket(ticket);
-    try {
-      const res = await axios.get(`${API_URL}/support/${ticket.id}/messages`, {
-        headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` },
-      });
-      setTicketReplies(res.data.messages);
+  const replyTicketMutation = useMutation({
+    mutationFn: async (text) =>
+      (
+        await axiosInstance.post(`/support/${selectedTicket.id}/messages`, {
+          message: text,
+        })
+      ).data,
+    onSuccess: (newMessage) => {
+      queryClient.setQueryData(
+        queryKeys.support.ticketMessages(selectedTicket.id),
+        (old) => [...(old || []), newMessage],
+      );
       setTimeout(
         () => ticketScrollRef.current?.scrollIntoView({ behavior: "smooth" }),
         100,
       );
-    } catch (err) {
-      toast.error("Failed to load ticket details.");
-    }
-  };
+    },
+    onError: (err) => toast.error(err.message || "Failed to post reply."),
+  });
 
-  const sendTicketReply = async (e) => {
-    e.preventDefault();
-    if (!ticketReplyText.trim()) return;
-    const textToSend = ticketReplyText;
-    setTicketReplyText("");
-
-    try {
-      const res = await axios.post(
-        `${API_URL}/support/${selectedTicket.id}/messages`,
-        { message: textToSend },
-        {
-          headers: {
-            Authorization: `Bearer ${sessionStorage.getItem("token")}`,
-          },
-        },
-      );
-      setTicketReplies((prev) => [...prev, res.data]);
-      setTimeout(
-        () => ticketScrollRef.current?.scrollIntoView({ behavior: "smooth" }),
-        100,
-      );
-    } catch (err) {
-      toast.error("Failed to post reply.");
-      setTicketReplyText(textToSend);
-    }
-  };
-
-  const resolveTicket = async () => {
-    if (!window.confirm("Mark ticket as resolved?")) return;
-    try {
-      await axios.put(
-        `${API_URL}/support/${selectedTicket.id}/close`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${sessionStorage.getItem("token")}`,
-          },
-        },
-      );
+  const closeTicketMutation = useMutation({
+    mutationFn: async () =>
+      axiosInstance.put(`/support/${selectedTicket.id}/close`, {}),
+    onSuccess: () => {
       toast.success("Ticket closed.");
       setSelectedTicket({ ...selectedTicket, status: "Closed" });
-      fetchTickets();
-    } catch (err) {
-      toast.error("Failed to close ticket.");
-    }
-  };
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.tickets });
+    },
+    onError: (err) => toast.error(err.message || "Failed to close ticket."),
+  });
 
   // ==========================================
-  // CHAT ACTIONS
+  // 3. LIVE CHAT SOCKET EVENT LISTENERS
   // ==========================================
-  const fetchConversations = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/chat/conversations`, {
-        headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` },
+  useEffect(() => {
+    const validMsg = chatMessages.find((m) => m.conversationId);
+    if (chatPartner && validMsg && activeTab === "live_chat" && socket) {
+      socket.emit("message:read", {
+        conversationId: validMsg.conversationId,
       });
-      setConversations(res.data);
-    } catch (err) {}
-  };
-
-  const loadContacts = async () => {
-    setChatPartner("NEW");
-    try {
-      const res = await axios.get(`${API_URL}/chat/partners`, {
-        headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` },
-      });
-      setContactList(res.data);
-    } catch (err) {
-      toast.error("Failed to load contacts.");
+      queryClient.invalidateQueries({ queryKey: ["unreadChats"] });
     }
-  };
+  }, [chatMessages, chatPartner, activeTab, socket, queryClient]);
 
-  const openLiveChat = async (partner) => {
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewMessage = (msg) => {
+      if (
+        chatPartner &&
+        (msg.senderId === chatPartner.id || msg.receiverId === chatPartner.id)
+      ) {
+        queryClient.setQueryData(["chat", chatPartner.id], (old) => {
+          if (old?.some((m) => m.id === msg.id)) return old;
+          return [...(old || []), msg];
+        });
+
+        setTimeout(
+          () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }),
+          100,
+        );
+
+        if (msg.conversationId) {
+          socket.emit("message:read", { conversationId: msg.conversationId });
+        }
+        queryClient.invalidateQueries({ queryKey: ["unreadChats"] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["chatConversations"] });
+      }
+    };
+
+    const handleTyping = ({ senderId, isTyping }) => {
+      if (chatPartner && senderId === chatPartner.id) setIsTyping(isTyping);
+    };
+
+    const handleTicketReply = (reply) => {
+      if (selectedTicket && reply.ticketId === selectedTicket.id) {
+        queryClient.setQueryData(
+          queryKeys.support.ticketMessages(selectedTicket.id),
+          (old) => [...(old || []), reply],
+        );
+        setTimeout(
+          () => ticketScrollRef.current?.scrollIntoView({ behavior: "smooth" }),
+          100,
+        );
+      }
+    };
+
+    socket.on("message:new", handleNewMessage);
+    socket.on("typing:status", handleTyping);
+    socket.on("ticket_reply", handleTicketReply);
+
+    return () => {
+      socket.off("message:new", handleNewMessage);
+      socket.off("typing:status", handleTyping);
+      socket.off("ticket_reply", handleTicketReply);
+    };
+  }, [socket, chatPartner, selectedTicket, queryClient]);
+
+  // ==========================================
+  // 4. CHAT HANDLERS
+  // ==========================================
+  const openLiveChat = (partner) => {
     setChatPartner(partner);
     setActiveTab("live_chat");
-    try {
-      const res = await axios.get(`${API_URL}/chat/history/${partner.id}`, {
-        headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` },
-      });
-      setChatMessages(res.data);
-      setTimeout(
-        () => chatScrollRef.current?.scrollIntoView({ behavior: "smooth" }),
-        100,
-      );
-    } catch (err) {
-      toast.error("Failed to load chat history.");
-    }
+    sessionStorage.setItem("activeChatPartner", partner.id);
   };
 
   const startAdminChat = async () => {
     try {
-      const res = await axios.get(`${API_URL}/chat/admin`, {
-        headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` },
-      });
+      const res = await axiosInstance.get("/chat/admin");
       if (res.data.adminId) {
         openLiveChat({
           id: res.data.adminId,
@@ -285,23 +247,57 @@ const CustomerSupport = () => {
     }
   };
 
-  const sendLiveMessage = (e) => {
-    e.preventDefault();
-    if (!chatInput.trim() || !socket || !chatPartner) return;
+  const handleTypingChange = (e) => {
+    setChatInput(e.target.value);
+    if (!socket || !chatPartner || chatPartner === "NEW") return;
 
-    socket.emit("send_message", {
-      receiverId: chatPartner.id,
-      message: chatInput,
-    });
-    setChatInput("");
+    socket.emit("typing:start", { receiverId: chatPartner.id });
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit("typing:stop", { receiverId: chatPartner.id });
+    }, 1500);
   };
 
-  if (loading)
-    return (
-      <div className="text-center mt-5">
-        <div className="spinner-border text-primary"></div>
-      </div>
+  const sendLiveMessage = (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !socket || !chatPartner || chatPartner === "NEW")
+      return;
+
+    if (!socket.connected) {
+      toast.error("Chat is currently disconnected. Reconnecting...");
+      return;
+    }
+
+    const tempId = `temp_${Date.now()}`;
+    const payload = { receiverId: chatPartner.id, message: chatInput };
+
+    queryClient.setQueryData(["chat", chatPartner.id], (old) => [
+      ...(old || []),
+      { id: tempId, senderId: user.id, message: chatInput, isPending: true },
+    ]);
+    setChatInput("");
+    setSendingMessageId(tempId);
+
+    setTimeout(
+      () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }),
+      100,
     );
+
+    socket.emit("message:send", payload, (response) => {
+      setSendingMessageId(null);
+      if (response.success) {
+        queryClient.setQueryData(["chat", chatPartner.id], (old) =>
+          old.map((msg) => (msg.id === tempId ? response.data : msg)),
+        );
+      } else {
+        toast.error(response.error?.message || "Failed to send message");
+        queryClient.setQueryData(["chat", chatPartner.id], (old) =>
+          old.filter((msg) => msg.id !== tempId),
+        );
+      }
+    });
+  };
 
   return (
     <div className="container-fluid mt-2 mb-5 max-w-75">
@@ -320,7 +316,6 @@ const CustomerSupport = () => {
       </h2>
 
       <div className="row g-4 h-100">
-        {/* ================= LEFT SIDEBAR NAVIGATION ================= */}
         <div className="col-lg-3">
           <div
             className="card shadow-lg border-0 rounded-4 h-100 p-3 d-flex flex-column gap-2"
@@ -344,10 +339,7 @@ const CustomerSupport = () => {
             )}
 
             <button
-              onClick={() => {
-                setActiveTab("live_chat");
-                fetchConversations();
-              }}
+              onClick={() => setActiveTab("live_chat")}
               className={`btn text-start fw-bold p-3 rounded-3 transition-all ${activeTab === "live_chat" ? "bg-primary text-white shadow" : "btn-dark text-muted"}`}
             >
               <FaComments className="me-2" /> Live Chat
@@ -376,7 +368,6 @@ const CustomerSupport = () => {
           </div>
         </div>
 
-        {/* ================= RIGHT MAIN CONTENT AREA ================= */}
         <div className="col-lg-9">
           <div
             className="card shadow-lg border-0 rounded-4 h-100 d-flex flex-column overflow-hidden"
@@ -387,7 +378,6 @@ const CustomerSupport = () => {
               minHeight: "75vh",
             }}
           >
-            {/* ----------------- 1. CONTACT US ----------------- */}
             {activeTab === "contact" && !isAdmin && (
               <div className="d-flex flex-column justify-content-center align-items-center h-100 p-5 text-center position-relative">
                 <div
@@ -431,7 +421,6 @@ const CustomerSupport = () => {
                     <h6 className="text-muted text-uppercase fw-bold mb-4 small tracking-wide">
                       Official Support Lines
                     </h6>
-
                     <div className="d-flex justify-content-center mb-4">
                       <a
                         href="tel:+9779800000000"
@@ -450,36 +439,28 @@ const CustomerSupport = () => {
 
                     <div className="d-flex justify-content-center gap-4">
                       <a
-                        href="https://instagram.com"
-                        target="_blank"
-                        rel="noreferrer"
+                        href="#"
                         className="btn btn-dark rounded-circle social-btn insta d-flex justify-content-center align-items-center"
                         style={{ width: "50px", height: "50px" }}
                       >
                         <FaInstagram size={24} className="text-light" />
                       </a>
                       <a
-                        href="https://facebook.com"
-                        target="_blank"
-                        rel="noreferrer"
+                        href="#"
                         className="btn btn-dark rounded-circle social-btn fb d-flex justify-content-center align-items-center"
                         style={{ width: "50px", height: "50px" }}
                       >
                         <FaFacebook size={24} className="text-light" />
                       </a>
                       <a
-                        href="https://twitter.com"
-                        target="_blank"
-                        rel="noreferrer"
+                        href="#"
                         className="btn btn-dark rounded-circle social-btn tw d-flex justify-content-center align-items-center"
                         style={{ width: "50px", height: "50px" }}
                       >
                         <FaTwitter size={24} className="text-light" />
                       </a>
                       <a
-                        href="https://linkedin.com"
-                        target="_blank"
-                        rel="noreferrer"
+                        href="#"
                         className="btn btn-dark rounded-circle social-btn in d-flex justify-content-center align-items-center"
                         style={{ width: "50px", height: "50px" }}
                       >
@@ -491,7 +472,6 @@ const CustomerSupport = () => {
               </div>
             )}
 
-            {/* ----------------- 2. CREATE TICKET ----------------- */}
             {activeTab === "create_ticket" && !isAdmin && (
               <div className="p-4 p-md-5">
                 <h4 className="text-white fw-bold mb-4 d-flex align-items-center">
@@ -502,7 +482,12 @@ const CustomerSupport = () => {
                   Formal tickets are routed strictly to the Platform
                   Administration team for resolution.
                 </p>
-                <form onSubmit={submitFormalTicket}>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submitTicketMutation.mutate(newTicketData);
+                  }}
+                >
                   <div className="mb-3">
                     <label className="form-label text-muted small fw-bold text-uppercase">
                       Subject
@@ -521,7 +506,6 @@ const CustomerSupport = () => {
                       required
                     />
                   </div>
-
                   <div className="mb-3">
                     <label className="form-label text-muted small fw-bold text-uppercase">
                       Routing
@@ -533,7 +517,6 @@ const CustomerSupport = () => {
                       disabled
                     />
                   </div>
-
                   <div className="mb-4">
                     <label className="form-label text-muted small fw-bold text-uppercase">
                       Detailed Description
@@ -552,53 +535,63 @@ const CustomerSupport = () => {
                       required
                     ></textarea>
                   </div>
-
                   <button
                     type="submit"
+                    disabled={submitTicketMutation.isPending}
                     className="btn btn-success fw-bold px-5 py-2 rounded-pill d-flex align-items-center shadow-sm"
                   >
-                    <FaCheckCircle className="me-2" /> Submit Ticket
+                    <FaCheckCircle className="me-2" />{" "}
+                    {submitTicketMutation.isPending
+                      ? "Submitting..."
+                      : "Submit Ticket"}
                   </button>
                 </form>
               </div>
             )}
 
-            {/* ----------------- 3. VIEW TICKETS ----------------- */}
             {activeTab === "view_tickets" && (
               <div className="d-flex flex-column h-100">
                 {!selectedTicket ? (
                   <div className="p-4 flex-grow-1 overflow-auto">
                     <h5 className="text-white fw-bold mb-4">Support Tickets</h5>
-                    <div className="list-group">
-                      {tickets.map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => openTicketDetails(t)}
-                          className="list-group-item list-group-item-action bg-dark text-white border-secondary mb-2 rounded-3 p-3 text-start"
-                        >
-                          <div className="d-flex justify-content-between align-items-center mb-1">
-                            <h6 className="fw-bold m-0 text-info">
-                              Ticket #{t.id}: {t.subject}
-                            </h6>
-                            <span
-                              className={`badge ${t.status === "Open" ? "bg-success" : "bg-secondary"}`}
-                            >
-                              {t.status}
-                            </span>
+                    {loadingTickets ? (
+                      <div className="text-center p-4">
+                        <div className="spinner-border text-info"></div>
+                      </div>
+                    ) : (
+                      <div className="list-group">
+                        {tickets.map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => setSelectedTicket(t)}
+                            className="list-group-item list-group-item-action bg-dark text-white border-secondary mb-2 rounded-3 p-3 text-start"
+                          >
+                            <div className="d-flex justify-content-between align-items-center mb-1">
+                              <h6 className="fw-bold m-0 text-info">
+                                Ticket #{t.id}: {t.subject}
+                              </h6>
+                              <span
+                                className={`badge ${t.status === "Open" ? "bg-success" : "bg-secondary"}`}
+                              >
+                                {t.status}
+                              </span>
+                            </div>
+                            <small className="text-muted">
+                              {isAdmin
+                                ? `From: ${t.Customer?.username} • `
+                                : ""}
+                              Created:{" "}
+                              {new Date(t.createdAt).toLocaleDateString()}
+                            </small>
+                          </button>
+                        ))}
+                        {tickets.length === 0 && (
+                          <div className="text-muted text-center p-5">
+                            No tickets found.
                           </div>
-                          <small className="text-muted">
-                            {isAdmin ? `From: ${t.Customer?.username} • ` : ""}
-                            Created:{" "}
-                            {new Date(t.createdAt).toLocaleDateString()}
-                          </small>
-                        </button>
-                      ))}
-                      {tickets.length === 0 && (
-                        <div className="text-muted text-center p-5">
-                          No tickets found.
-                        </div>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="d-flex flex-column h-100">
@@ -608,54 +601,69 @@ const CustomerSupport = () => {
                           onClick={() => setSelectedTicket(null)}
                           className="btn btn-light fw-bold rounded-pill px-4 shadow-sm d-flex align-items-center"
                         >
-                          <FaArrowLeft className="me-2" /> Back to Tickets
+                          <FaArrowLeft className="me-2" /> Back
                         </button>
                         <h5 className="m-0 text-white fw-bold">
                           Ticket #{selectedTicket.id}
                         </h5>
                       </div>
-                      <div className="d-flex gap-2">
-                        {selectedTicket.status === "Open" && (
-                          <button
-                            onClick={resolveTicket}
-                            className="btn btn-outline-success rounded-pill fw-bold"
-                          >
-                            Mark Resolved
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="p-4 flex-grow-1 overflow-auto bg-transparent">
-                      {ticketReplies.map((reply, i) => (
-                        <div
-                          key={i}
-                          className="mb-4 bg-dark p-3 rounded-4 border border-secondary shadow-sm"
+                      {selectedTicket.status === "Open" && (
+                        <button
+                          onClick={() => {
+                            if (window.confirm("Close this ticket?"))
+                              closeTicketMutation.mutate();
+                          }}
+                          className="btn btn-outline-success rounded-pill fw-bold"
                         >
-                          <div className="d-flex align-items-center gap-2 mb-2">
-                            <span className="badge bg-secondary text-uppercase">
-                              {reply.Sender?.role}
-                            </span>
-                            <strong className="text-info">
-                              {reply.Sender?.username}
-                            </strong>
-                            <small className="text-muted ms-auto">
-                              {new Date(reply.createdAt).toLocaleString()}
-                            </small>
-                          </div>
-                          <p
-                            className="text-white m-0"
-                            style={{ whiteSpace: "pre-wrap" }}
-                          >
-                            {reply.message}
-                          </p>
+                          Mark Resolved
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="p-4 flex-grow-1 overflow-auto bg-transparent">
+                      {loadingReplies ? (
+                        <div className="text-center p-4">
+                          <div className="spinner-border text-info"></div>
                         </div>
-                      ))}
+                      ) : (
+                        ticketReplies.map((reply, i) => (
+                          <div
+                            key={i}
+                            className="mb-4 bg-dark p-3 rounded-4 border border-secondary shadow-sm"
+                          >
+                            <div className="d-flex align-items-center gap-2 mb-2">
+                              <span className="badge bg-secondary text-uppercase">
+                                {reply.Sender?.role}
+                              </span>
+                              <strong className="text-info">
+                                {reply.Sender?.username}
+                              </strong>
+                              <small className="text-muted ms-auto">
+                                {new Date(reply.createdAt).toLocaleString()}
+                              </small>
+                            </div>
+                            <p
+                              className="text-white m-0"
+                              style={{ whiteSpace: "pre-wrap" }}
+                            >
+                              {reply.message}
+                            </p>
+                          </div>
+                        ))
+                      )}
                       <div ref={ticketScrollRef} />
                     </div>
+
                     {selectedTicket.status === "Open" && (
                       <div className="p-3 bg-dark border-top border-secondary">
                         <form
-                          onSubmit={sendTicketReply}
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            if (ticketReplyText.trim()) {
+                              replyTicketMutation.mutate(ticketReplyText);
+                              setTicketReplyText("");
+                            }
+                          }}
                           className="d-flex gap-2"
                         >
                           <input
@@ -667,8 +675,11 @@ const CustomerSupport = () => {
                           />
                           <button
                             type="submit"
+                            disabled={
+                              !ticketReplyText.trim() ||
+                              replyTicketMutation.isPending
+                            }
                             className="btn btn-primary fw-bold px-4"
-                            disabled={!ticketReplyText.trim()}
                           >
                             Reply
                           </button>
@@ -680,15 +691,14 @@ const CustomerSupport = () => {
               </div>
             )}
 
-            {/* ----------------- 4. LIVE CHAT ----------------- */}
+            {/* TAB: LIVE CHAT */}
             {activeTab === "live_chat" && (
               <div className="row g-0 h-100">
-                {/* Chat Partner Sidebar */}
                 <div className="col-4 border-end border-secondary border-opacity-50 h-100 overflow-auto bg-dark d-flex flex-column">
                   <div className="p-3 border-bottom border-secondary d-flex justify-content-between align-items-center position-sticky top-0 bg-dark z-1">
                     <h6 className="text-white fw-bold m-0">Recent Chats</h6>
                     <button
-                      onClick={loadContacts}
+                      onClick={() => setChatPartner("NEW")}
                       className="btn btn-sm btn-info rounded-circle shadow-sm"
                       title="Start New Chat"
                     >
@@ -719,13 +729,12 @@ const CustomerSupport = () => {
                     })}
                     {conversations.length === 0 && (
                       <div className="text-muted p-3 text-center small mt-3">
-                        No active chats. Click the + button above to start one.
+                        No active chats. Click + to start.
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Chat Window */}
                 <div className="col-8 d-flex flex-column h-100">
                   {chatPartner === "NEW" ? (
                     <div className="p-4 flex-grow-1 overflow-auto">
@@ -765,35 +774,33 @@ const CustomerSupport = () => {
                             </div>
                           </div>
                         ))}
-                        {contactList.length === 0 && (
-                          <div className="text-muted">
-                            No contacts available.
-                          </div>
-                        )}
                       </div>
                     </div>
                   ) : chatPartner ? (
                     <>
                       <div className="p-3 border-bottom border-secondary bg-dark d-flex justify-content-between align-items-center">
                         <h6 className="text-white fw-bold m-0 d-flex align-items-center">
-                          <span
-                            className="bg-success rounded-circle me-2"
-                            style={{ width: "10px", height: "10px" }}
-                          ></span>
+                          <FaCircle
+                            className={`me-2 ${onlineUsers && onlineUsers.includes(chatPartner.id) ? "text-success" : "text-secondary"}`}
+                            size={12}
+                            title={
+                              onlineUsers &&
+                              onlineUsers.includes(chatPartner.id)
+                                ? "Online"
+                                : "Offline"
+                            }
+                          />
                           {chatPartner.storeName || chatPartner.username}
                         </h6>
                         <a
                           href={`mailto:${chatPartner.email}`}
                           className="btn btn-sm btn-outline-info rounded-pill px-3 fw-bold"
                         >
-                          <FaEnvelope className="me-2" /> Email User
+                          <FaEnvelope className="me-2" /> Email
                         </a>
                       </div>
 
-                      <div
-                        ref={chatScrollRef}
-                        className="p-4 flex-grow-1 overflow-auto d-flex flex-column gap-3 chat-bg"
-                      >
+                      <div className="p-4 flex-grow-1 overflow-auto d-flex flex-column gap-3 chat-bg">
                         {chatMessages.map((msg, idx) => {
                           const isMe = msg.senderId === user.id;
                           return (
@@ -805,6 +812,7 @@ const CustomerSupport = () => {
                                 className={`p-3 rounded-4 shadow-sm ${isMe ? "bg-primary text-white" : "bg-dark text-white border border-secondary"}`}
                                 style={{
                                   maxWidth: "80%",
+                                  opacity: msg.isPending ? 0.6 : 1,
                                   borderBottomRightRadius: isMe
                                     ? "4px"
                                     : "16px",
@@ -820,9 +828,22 @@ const CustomerSupport = () => {
                                   {msg.message}
                                 </p>
                               </div>
+                              {msg.isPending && (
+                                <small
+                                  className="text-muted mt-1 me-2"
+                                  style={{ fontSize: "10px" }}
+                                >
+                                  Sending...
+                                </small>
+                              )}
                             </div>
                           );
                         })}
+                        {isTyping && (
+                          <div className="text-muted small ms-2 fst-italic">
+                            {chatPartner.username} is typing...
+                          </div>
+                        )}
                         <div ref={messagesEndRef} />
                       </div>
 
@@ -836,14 +857,16 @@ const CustomerSupport = () => {
                             className="form-control bg-transparent text-white border-secondary rounded-pill px-4"
                             placeholder="Type a message..."
                             value={chatInput}
-                            onChange={(e) => setChatInput(e.target.value)}
-                            autoFocus
+                            onChange={handleTypingChange}
+                            disabled={sendingMessageId !== null}
                           />
                           <button
                             type="submit"
                             className="btn btn-primary rounded-circle shadow"
                             style={{ width: "45px", height: "45px" }}
-                            disabled={!chatInput.trim()}
+                            disabled={
+                              !chatInput.trim() || sendingMessageId !== null
+                            }
                           >
                             <FaPaperPlane />
                           </button>
@@ -854,7 +877,6 @@ const CustomerSupport = () => {
                     <div className="d-flex flex-column justify-content-center align-items-center h-100 text-muted opacity-50 p-5 text-center">
                       <FaComments size={60} className="mb-3" />
                       <h5>Select a conversation</h5>
-                      <p>Or click the + button to start a new chat.</p>
                     </div>
                   )}
                 </div>

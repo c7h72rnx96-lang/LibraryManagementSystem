@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import {
   FaArrowLeft,
   FaUserCircle,
@@ -15,8 +15,7 @@ import {
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
+const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
 
 const UserDetails = () => {
   const { id } = useParams();
@@ -33,16 +32,13 @@ const UserDetails = () => {
 
   const fetchUserDetails = async () => {
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/admin/users/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axiosInstance.get(`/admin/users/${id}`);
       setData(response.data);
       if (response.data.user.role === "seller") {
         setCommissionRate(response.data.user.commissionRate);
       }
     } catch (error) {
-      toast.error("Failed to load user details.");
+      toast.error(error.message || "Failed to load user details.");
       navigate("/manage-users");
     } finally {
       setLoading(false);
@@ -52,18 +48,13 @@ const UserDetails = () => {
   const handleUpdateCommission = async () => {
     setUpdating(true);
     try {
-      const token = sessionStorage.getItem("token");
-      await axios.put(
-        `${API_URL}/admin/users/${id}/commission`,
-        { commissionRate },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      await axiosInstance.put(`/admin/users/${id}/commission`, {
+        commissionRate,
+      });
       toast.success("Commission rate updated successfully!");
       fetchUserDetails();
     } catch (error) {
-      toast.error("Failed to update commission rate.");
+      toast.error(error.message || "Failed to update commission rate.");
     } finally {
       setUpdating(false);
     }
@@ -90,7 +81,6 @@ const UserDetails = () => {
       </button>
 
       <div className="row g-4">
-        {/* PROFILE CARD */}
         <div className="col-lg-4">
           <div
             className="card shadow-lg border-0 rounded-4 overflow-hidden h-100 bg-dark text-white border-secondary"
@@ -177,11 +167,9 @@ const UserDetails = () => {
           </div>
         </div>
 
-        {/* SELLER STATS & COMMISSION SETTINGS */}
         <div className="col-lg-8">
           {isSeller ? (
             <>
-              {/* COMMISSION EDITOR */}
               <div className="card shadow-sm border-secondary border-opacity-50 rounded-4 bg-dark text-white mb-4">
                 <div className="card-body p-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
                   <div>
@@ -216,7 +204,6 @@ const UserDetails = () => {
                 </div>
               </div>
 
-              {/* STATS CARDS */}
               <div className="row g-3 mb-4">
                 <div className="col-md-3">
                   <div
@@ -237,7 +224,6 @@ const UserDetails = () => {
                     </h4>
                   </div>
                 </div>
-                {/* 🔥 NEW PENDING VALUE CARD */}
                 <div className="col-md-3">
                   <div
                     className="card shadow-sm border-0 rounded-4 p-3 h-100"
@@ -297,12 +283,10 @@ const UserDetails = () => {
                 </div>
               </div>
 
-              {/* TABS FOR RECENT ACTIVITY */}
               <h5 className="text-white fw-bold mb-3 mt-4">
                 <FaClock className="me-2 text-info" /> Recent Store Activity
               </h5>
               <div className="row g-4">
-                {/* RECENT SALES */}
                 <div className="col-md-6">
                   <div className="card bg-dark border-secondary rounded-4 shadow-sm h-100">
                     <div className="card-header bg-transparent border-secondary border-opacity-50 py-3">
@@ -342,7 +326,6 @@ const UserDetails = () => {
                                   style={{ fontSize: "14px" }}
                                 >
                                   {item.Book.title}
-                                  {/* 🔥 Shows the exact status of the item so the Admin isn't confused! */}
                                   <span
                                     className={`badge ms-2 ${item.itemStatus === "Delivered" ? "bg-success" : "bg-warning text-dark"}`}
                                     style={{ fontSize: "9px" }}
@@ -368,7 +351,6 @@ const UserDetails = () => {
                   </div>
                 </div>
 
-                {/* PAYOUT LEDGER */}
                 <div className="col-md-6">
                   <div className="card bg-dark border-secondary rounded-4 shadow-sm h-100">
                     <div className="card-header bg-transparent border-secondary border-opacity-50 py-3">

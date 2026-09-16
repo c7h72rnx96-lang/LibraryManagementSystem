@@ -13,11 +13,13 @@ import {
   getCustomerDashboardStats, // <-- 1. ADD THIS IMPORT
 } from "../controllers/orderController.js";
 import { authenticate, authorize } from "../middleware/auth.js";
+import { actionLimiter } from "../middleware/rateLimiter.js";
 
 const router = Router();
 
 // Customer routes
 router.post("/", authenticate, createOrder);
+router.post("/", authenticate, actionLimiter, createOrder);
 router.get("/", authenticate, getUserOrders);
 
 // Admin routes

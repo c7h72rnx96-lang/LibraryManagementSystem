@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import {
   FaMoneyCheckAlt,
   FaStore,
@@ -7,8 +7,6 @@ import {
   FaFileInvoiceDollar,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
-
-const API_URL = import.meta.env.VITE_API_URL;
 
 const AdminPayouts = () => {
   const [sellers, setSellers] = useState([]);
@@ -22,14 +20,9 @@ const AdminPayouts = () => {
 
   const fetchData = async () => {
     try {
-      const token = sessionStorage.getItem("token");
       const [userRes, ledgerRes] = await Promise.all([
-        axios.get(`${API_URL}/admin/users`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`${API_URL}/admin/payouts/history`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+        axiosInstance.get("/admin/users"),
+        axiosInstance.get("/admin/payouts/history"),
       ]);
 
       const approvedSellers = userRes.data.filter(
@@ -38,7 +31,7 @@ const AdminPayouts = () => {
       setSellers(approvedSellers);
       setLedger(ledgerRes.data);
     } catch (error) {
-      toast.error("Failed to load payout data.");
+      toast.error(error.message || "Failed to load payout data.");
     } finally {
       setLoading(false);
     }
@@ -51,16 +44,11 @@ const AdminPayouts = () => {
       return;
     setProcessing(true);
     try {
-      const token = sessionStorage.getItem("token");
-      await axios.put(
-        `${API_URL}/admin/users/${sellerId}/settle`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      await axiosInstance.put(`/admin/users/${sellerId}/settle`, {});
       toast.success("Seller balance settled successfully!");
-      fetchData(); // Refreshes both pending lists AND the ledger!
+      fetchData();
     } catch (error) {
-      toast.error("Failed to settle payout.");
+      toast.error(error.message || "Failed to settle payout.");
     } finally {
       setProcessing(false);
     }
@@ -82,7 +70,6 @@ const AdminPayouts = () => {
         <FaMoneyCheckAlt className="me-3 text-info" /> Seller Payouts
       </h2>
 
-      {/* PENDING PAYOUTS SECTION */}
       <div className="mb-5">
         <h5 className="text-white fw-bold mb-3">Pending Settlements</h5>
         {pendingPayouts.length === 0 ? (
@@ -150,7 +137,6 @@ const AdminPayouts = () => {
         )}
       </div>
 
-      {/* ADMIN HISTORICAL STATEMENT LEDGER */}
       <h5 className="text-white fw-bold mb-3 d-flex align-items-center">
         <FaFileInvoiceDollar className="me-2 text-warning" /> Historical Payout
         Ledger

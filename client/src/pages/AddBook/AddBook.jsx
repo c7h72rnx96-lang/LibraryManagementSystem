@@ -1,13 +1,11 @@
-// === src/pages/AddBook/AddBook.jsx ===
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import BookService from "../../services/BookService.js";
 import AuthorService from "../../services/AuthorService.js";
 import GenreService from "../../services/GenreService.js";
+import axiosInstance from "../../utils/axiosInstance.js"; // <-- NEW
 import { FaPlus, FaCheck, FaTimes, FaSearch, FaSpinner } from "react-icons/fa";
 import toast from "react-hot-toast";
-
-const GOOGLE_BOOKS_API_KEY = import.meta.env.VITE_GOOGLE_BOOKS_API_KEY;
 
 const AddBook = () => {
   const navigate = useNavigate();
@@ -90,7 +88,7 @@ const AddBook = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [id]);
 
-  // Debounced Live Title Search
+  // SECURE Debounced Live Title Search via Backend Proxy
   useEffect(() => {
     const fetchSuggestions = async () => {
       if (isSelectingRef.current || title.trim().length < 3) {
@@ -101,21 +99,16 @@ const AddBook = () => {
 
       setIsFetchingSuggestions(true);
       try {
-        // 🔥 FIX: Increased maxResults to 15 so it overflows and forces a scrollbar
-        const fetchUrl = GOOGLE_BOOKS_API_KEY
-          ? `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(title)}&key=${GOOGLE_BOOKS_API_KEY}&maxResults=15`
-          : `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(title)}&maxResults=15`;
+        const response = await axiosInstance.get(
+          `/books/external-lookup?title=${encodeURIComponent(title)}`,
+        );
 
-        const res = await fetch(fetchUrl);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.items) {
-            setSuggestions(data.items);
-            setShowSuggestions(true);
-          }
+        if (response.data && response.data.items) {
+          setSuggestions(response.data.items);
+          setShowSuggestions(true);
         }
       } catch (error) {
-        console.warn("Suggestion fetch failed.");
+        console.warn("Suggestion fetch failed.", error);
       } finally {
         setIsFetchingSuggestions(false);
       }
@@ -185,6 +178,7 @@ const AddBook = () => {
     }, 800);
   };
 
+  // SECURE ISBN Lookup via Backend Proxy
   const handleIsbnLookup = async () => {
     if (!isbn.trim()) return toast.error("Please enter an ISBN number");
 
@@ -194,12 +188,10 @@ const AddBook = () => {
     );
 
     try {
-      const fetchUrl = GOOGLE_BOOKS_API_KEY
-        ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn.trim()}&key=${GOOGLE_BOOKS_API_KEY}`
-        : `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn.trim()}`;
-
-      const googleRes = await fetch(fetchUrl);
-      const googleData = await googleRes.json();
+      const response = await axiosInstance.get(
+        `/books/external-lookup?isbn=${isbn.trim()}`,
+      );
+      const googleData = response.data;
 
       if (googleData.items && googleData.items.length > 0) {
         const bookData = googleData.items[0].volumeInfo;
@@ -222,7 +214,7 @@ const AddBook = () => {
           );
         }
 
-        toast.success("Details auto-filled from Google Books!", {
+        toast.success("Details auto-filled from Database!", {
           id: toastId,
         });
         setTimeout(() => {
@@ -325,7 +317,6 @@ const AddBook = () => {
 
   return (
     <div className="row justify-content-center pb-5">
-      {/* 🔥 ADDED: Custom CSS to style the scrollbar so it matches your dark theme */}
       <style>{`
         .dropdown-scroll::-webkit-scrollbar {
           width: 8px;
@@ -382,7 +373,6 @@ const AddBook = () => {
                   </div>
                 </div>
 
-                {/* LIVE AUTO-SUGGEST TITLE FIELD */}
                 <div
                   className="col-md-7 mt-3 mt-md-0 position-relative"
                   ref={suggestionBoxRef}
@@ -409,7 +399,6 @@ const AddBook = () => {
                     required
                   />
 
-                  {/* SUGGESTION DROPDOWN */}
                   {showSuggestions && suggestions.length > 0 && (
                     <div
                       className="position-absolute w-100 mt-1 shadow-lg rounded dropdown-scroll"
@@ -417,9 +406,8 @@ const AddBook = () => {
                         zIndex: 1050,
                         background: "#1e293b",
                         border: "1px solid #475569",
-                        maxHeight:
-                          "280px" /* 🔥 Lowered slightly to force scrolling */,
-                        overflowY: "auto" /* 🔥 Tells it to scroll! */,
+                        maxHeight: "280px",
+                        overflowY: "auto",
                       }}
                     >
                       {suggestions.map((s, idx) => {
@@ -469,7 +457,6 @@ const AddBook = () => {
                 </div>
               </div>
 
-              {/* AUTHOR SELECTION / CREATION */}
               <div className="row">
                 <div className="col-md-6 mb-4">
                   <label className="form-label text-light fw-bold small">
@@ -525,7 +512,6 @@ const AddBook = () => {
                   )}
                 </div>
 
-                {/* GENRE SELECTION / CREATION */}
                 <div className="col-md-6 mb-4">
                   <label className="form-label text-light fw-bold small">
                     GENRE

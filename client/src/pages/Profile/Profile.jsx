@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import {
   FaUserCircle,
   FaSave,
@@ -17,21 +17,19 @@ import {
 import toast from "react-hot-toast";
 import { AuthContext } from "../../context/AuthContext.jsx";
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
+const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
 
 const Profile = () => {
   const { user, setUser } = useContext(AuthContext);
 
-  // Profile State
   const [formData, setFormData] = useState({
     username: "",
     email: "",
     phone: "",
     address: "",
     city: "",
-    storeName: "", // 🔥 Added for Seller
-    storeDescription: "", // 🔥 Added for Seller
+    storeName: "",
+    storeDescription: "",
   });
   const [avatar, setAvatar] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -39,7 +37,6 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Security (Password) State
   const [passwordData, setPasswordData] = useState({
     oldPassword: "",
     newPassword: "",
@@ -53,20 +50,17 @@ const Profile = () => {
 
   const fetchProfile = async () => {
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/auth/profile`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
+      const response = await axiosInstance.get("/auth/profile");
       const data = response.data;
+
       setFormData({
         username: data.username || "",
         email: data.email || "",
         phone: data.phone || "",
         address: data.address || "",
         city: data.city || "",
-        storeName: data.storeName || "", // 🔥 Catch existing store name
-        storeDescription: data.storeDescription || "", // 🔥 Catch existing description
+        storeName: data.storeName || "",
+        storeDescription: data.storeDescription || "",
       });
 
       if (data.avatar) {
@@ -77,8 +71,7 @@ const Profile = () => {
         );
       }
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to load profile data");
+      toast.error(error.message || "Failed to load profile data");
     } finally {
       setLoading(false);
     }
@@ -104,7 +97,6 @@ const Profile = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      const token = sessionStorage.getItem("token");
       const submitData = new FormData();
       submitData.append("username", formData.username);
       submitData.append("email", formData.email);
@@ -112,7 +104,6 @@ const Profile = () => {
       submitData.append("address", formData.address);
       submitData.append("city", formData.city);
 
-      // 🔥 Send Seller data if they are a seller
       if (user?.role === "seller") {
         submitData.append("storeName", formData.storeName);
         submitData.append("storeDescription", formData.storeDescription);
@@ -120,18 +111,15 @@ const Profile = () => {
 
       if (avatar) submitData.append("avatar", avatar);
 
-      const response = await axios.put(`${API_URL}/auth/profile`, submitData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
+      const response = await axiosInstance.put("/auth/profile", submitData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
       toast.success(response.data.message);
       setUser(response.data.user);
       sessionStorage.setItem("user", JSON.stringify(response.data.user));
     } catch (error) {
-      toast.error("Failed to update profile");
+      toast.error(error.message || "Failed to update profile");
     } finally {
       setSaving(false);
     }
@@ -146,17 +134,10 @@ const Profile = () => {
 
     setChangingPassword(true);
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.put(
-        `${API_URL}/auth/change-password`,
-        {
-          oldPassword: passwordData.oldPassword,
-          newPassword: passwordData.newPassword,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      const response = await axiosInstance.put("/auth/change-password", {
+        oldPassword: passwordData.oldPassword,
+        newPassword: passwordData.newPassword,
+      });
 
       toast.success(response.data.message);
       setPasswordData({
@@ -165,7 +146,7 @@ const Profile = () => {
         confirmPassword: "",
       });
     } catch (error) {
-      toast.error(error.response?.data?.error || "Failed to change password");
+      toast.error(error.message || "Failed to change password");
     } finally {
       setChangingPassword(false);
     }
@@ -183,7 +164,6 @@ const Profile = () => {
       <h2 className="fw-bold mb-4 text-white">My Profile</h2>
 
       <div className="row g-4">
-        {/* LEFT COLUMN: Profile Details */}
         <div className="col-lg-7">
           <div className="card shadow-lg border-secondary rounded-4 overflow-hidden mb-4 bg-dark">
             <div
@@ -305,7 +285,6 @@ const Profile = () => {
                   </div>
                 </div>
 
-                {/* 🔥 DYNAMIC SELLER BUSINESS SECTION 🔥 */}
                 {user?.role === "seller" && (
                   <>
                     <hr className="my-4 border-secondary opacity-50" />
@@ -315,7 +294,6 @@ const Profile = () => {
                     >
                       <FaStore className="me-2" /> Business Information
                     </h5>
-
                     <div className="mb-3">
                       <label className="form-label fw-bold text-muted small">
                         STORE / BUSINESS NAME
@@ -329,7 +307,6 @@ const Profile = () => {
                         required
                       />
                     </div>
-
                     <div className="mb-4">
                       <label className="form-label fw-bold text-muted small">
                         <FaInfoCircle className="me-1" /> STORE DESCRIPTION
@@ -363,7 +340,6 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Security & Password */}
         <div className="col-lg-5">
           <div className="card shadow-sm border-secondary rounded-4 bg-dark text-white">
             <div className="card-header bg-transparent py-3 border-bottom border-secondary border-opacity-50">
@@ -386,7 +362,6 @@ const Profile = () => {
                     required
                   />
                 </div>
-
                 <div className="mb-3">
                   <label className="form-label fw-bold text-success small">
                     NEW PASSWORD
@@ -401,7 +376,6 @@ const Profile = () => {
                     required
                   />
                 </div>
-
                 <div className="mb-4">
                   <label className="form-label fw-bold text-success small">
                     CONFIRM NEW PASSWORD
@@ -416,7 +390,6 @@ const Profile = () => {
                     required
                   />
                 </div>
-
                 <button
                   type="submit"
                   className="btn btn-outline-danger w-100 fw-bold rounded-pill"

@@ -1,66 +1,42 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import WishlistService from "../../services/WishlistService";
 import { FaHeart, FaTrash, FaShoppingCart, FaBookOpen } from "react-icons/fa";
-import { AuthContext } from "../../context/AuthContext";
-import axios from "axios";
-import toast from "react-hot-toast";
+import { AuthContext } from "../../context/AuthContext.jsx";
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
+// TanStack Query
+import {
+  useWishlistQuery,
+  useToggleWishlist,
+} from "../../hooks/mutations/useWishlistMutations.js";
+import { useAddToCart } from "../../hooks/mutations/useCartMutations.js";
+
+const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
 
 const Wishlist = () => {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
-  const [wishlist, setWishlist] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) fetchWishlist();
-  }, [user]);
+  // Server State via TanStack Query (Replaces useEffect and useState)
+  const { data: wishlist = [], isLoading } = useWishlistQuery(user);
+  const { mutate: toggleWishlist } = useToggleWishlist();
+  const { mutate: addToCart, isPending: isAdding } = useAddToCart();
 
-  const fetchWishlist = async () => {
-    try {
-      const data = await WishlistService.getWishlist();
-      setWishlist(data);
-    } catch (error) {
-      toast.error("Failed to load wishlist");
-    } finally {
-      setLoading(false);
-    }
+  const handleAddToCart = (bookId) => {
+    addToCart(bookId, {
+      onSuccess: () => {
+        // Automatically remove it from the wishlist after successfully adding to cart
+        toggleWishlist(bookId);
+      },
+    });
   };
 
-  const handleRemove = async (bookId) => {
-    try {
-      await WishlistService.toggleWishlist(bookId);
-      setWishlist(wishlist.filter((item) => item.bookId !== bookId));
-      toast.success("Removed from wishlist");
-    } catch (error) {
-      toast.error("Failed to remove item");
-    }
-  };
-
-  const handleAddToCart = async (bookId) => {
-    try {
-      const token = sessionStorage.getItem("token");
-      await axios.post(
-        `${API_URL}/cart/add`,
-        { bookId },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      toast.success("Added to cart!");
-      handleRemove(bookId); // Auto-remove from wishlist once added to cart!
-    } catch (error) {
-      toast.error("Failed to add to cart");
-    }
-  };
-
-  if (loading)
+  if (isLoading) {
     return (
       <div className="text-center mt-5">
         <div className="spinner-border text-danger"></div>
       </div>
     );
+  }
 
   return (
     <div className="container-fluid mt-2 mb-5">
@@ -144,12 +120,13 @@ const Wishlist = () => {
                   <div className="d-flex gap-2">
                     <button
                       onClick={() => handleAddToCart(item.bookId)}
+                      disabled={isAdding}
                       className="btn btn-primary flex-fill rounded-3 fw-bold"
                     >
                       <FaShoppingCart /> Add
                     </button>
                     <button
-                      onClick={() => handleRemove(item.bookId)}
+                      onClick={() => toggleWishlist(item.bookId)}
                       className="btn btn-light text-danger border rounded-3 px-3"
                     >
                       <FaTrash />

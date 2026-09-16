@@ -1,8 +1,6 @@
 const BASE_URL = import.meta.env.VITE_API_URL;
 
 export const fetchAPI = async (endpoint, options = {}) => {
-  const token = sessionStorage.getItem("token");
-
   const headers = {
     ...options.headers,
   };
@@ -11,18 +9,16 @@ export const fetchAPI = async (endpoint, options = {}) => {
     headers["Content-Type"] = "application/json";
   }
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
     headers,
+    credentials: "include", // CRITICAL: Sends HttpOnly cookies with native fetch
   });
 
   const data = await response.json();
 
   if (!response.ok) {
+    if (response.status === 401) window.location.href = "/login";
     throw new Error(data.error || data.message || "Something went wrong");
   }
 

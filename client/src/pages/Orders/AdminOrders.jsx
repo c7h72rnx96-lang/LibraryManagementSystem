@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import { FaClipboardList, FaUser, FaMapMarkerAlt } from "react-icons/fa";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 
-const API_URL = import.meta.env.VITE_API_URL;
-
 const AdminOrders = () => {
-  const navigate = useNavigate(); // <-- This handles the page routing
-  const [orders, setOrders] = useState([]); // <-- This is a state variable
-  const [loading, setLoading] = useState(true); // <-- This is a state variable
+  const navigate = useNavigate();
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchOrders();
@@ -17,14 +15,10 @@ const AdminOrders = () => {
 
   const fetchOrders = async () => {
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/orders/all`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axiosInstance.get("/orders/all");
       setOrders(response.data);
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to load store orders");
+      toast.error(error.message || "Failed to load store orders");
     } finally {
       setLoading(false);
     }
@@ -32,17 +26,13 @@ const AdminOrders = () => {
 
   const handleStatusChange = async (orderId, newStatus) => {
     try {
-      const token = sessionStorage.getItem("token");
-      await axios.put(
-        `${API_URL}/orders/${orderId}/status`,
-        { orderStatus: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      await axiosInstance.put(`/orders/${orderId}/status`, {
+        orderStatus: newStatus,
+      });
       toast.success(`Order #${orderId} marked as ${newStatus}`);
       fetchOrders();
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to update status");
+      toast.error(error.message || "Failed to update status");
     }
   };
 
@@ -113,7 +103,6 @@ const AdminOrders = () => {
                       {order.paymentStatus}
                     </span>
                   </td>
-                  {/* e.stopPropagation() prevents the row from clicking when you just want to change the dropdown */}
                   <td
                     style={{ width: "200px" }}
                     onClick={(e) => e.stopPropagation()}

@@ -1,6 +1,8 @@
 import React, { useContext, useState } from "react";
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext.jsx";
+import axiosInstance from "../utils/axiosInstance.js";
+import { useQuery } from "@tanstack/react-query"; // <-- Imported useQuery
 import {
   FaBookOpen,
   FaSearch,
@@ -11,7 +13,7 @@ import {
   FaBoxOpen,
   FaBars,
   FaTimes,
-  FaHeadset, // <-- Added Headset icon
+  FaHeadset,
 } from "react-icons/fa";
 
 const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
@@ -21,6 +23,14 @@ const StorefrontLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // 🔥 NEW: Fetch Unread Chat Count
+  const { data: unreadData } = useQuery({
+    queryKey: ["unreadChats"],
+    queryFn: async () => (await axiosInstance.get("/chat/unread")).data,
+    enabled: !!user, // Only run this if the user is logged in
+  });
+  const unreadCount = unreadData?.unreadCount || 0;
 
   const handleLogout = () => {
     logout();
@@ -134,13 +144,22 @@ const StorefrontLayout = () => {
               >
                 <FaBoxOpen size={22} />
               </Link>
-              {/* 🔥 NEW: Help Center Icon */}
+
+              {/* 🔥 UPDATED: Help Center Icon with UNREAD BADGE */}
               <Link
                 to="/support"
                 className="btn btn-link text-info position-relative p-0 hover-glow ms-2 me-3"
                 title="Help Center"
               >
                 <FaHeadset size={24} />
+                {unreadCount > 0 && (
+                  <span
+                    className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-dark"
+                    style={{ fontSize: "10px" }}
+                  >
+                    {unreadCount}
+                  </span>
+                )}
               </Link>
 
               {user ? (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom"; // 🔥 Added useParams here
-import axios from "axios";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import axiosInstance from "../../utils/axiosInstance.js";
 import {
   FaArrowLeft,
   FaBox,
@@ -10,8 +10,7 @@ import {
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
+const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
 
 const OrderDetails = () => {
   const { id } = useParams();
@@ -25,14 +24,10 @@ const OrderDetails = () => {
 
   const fetchOrder = async () => {
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/orders/admin/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axiosInstance.get(`/orders/admin/${id}`);
       setOrder(response.data);
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to load order details");
+      toast.error(error.message || "Failed to load order details");
     } finally {
       setLoading(false);
     }
@@ -40,31 +35,23 @@ const OrderDetails = () => {
 
   const handleStatusChange = async (newStatus) => {
     try {
-      const token = sessionStorage.getItem("token");
-      await axios.put(
-        `${API_URL}/orders/${id}/status`,
-        { orderStatus: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      await axiosInstance.put(`/orders/${id}/status`, {
+        orderStatus: newStatus,
+      });
       toast.success(`Order marked as ${newStatus}`);
-      fetchOrder(); // Refresh page to get latest data
+      fetchOrder();
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to update status");
+      toast.error(error.message || "Failed to update status");
     }
   };
 
-  // 🔥 MOVED OUTSIDE: PDF Invoice Generator
   const handleDownloadInvoice = async () => {
     const toastId = toast.loading("Generating PDF...");
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/orders/${id}/invoice`, {
-        headers: { Authorization: `Bearer ${token}` },
-        responseType: "blob", // CRITICAL: Expect binary file
+      const response = await axiosInstance.get(`/orders/${id}/invoice`, {
+        responseType: "blob",
       });
 
-      // Create a temporary link element to trigger the browser download
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
@@ -75,16 +62,15 @@ const OrderDetails = () => {
 
       toast.success("Invoice downloaded!", { id: toastId });
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to download invoice", { id: toastId });
+      toast.error(error.message || "Failed to download invoice", {
+        id: toastId,
+      });
     }
   };
 
-  // Save the checkbox status directly to the database!
   const togglePack = async (itemId, currentStatus) => {
     const newStatus = !currentStatus;
 
-    // 1. Optimistic UI update (feels instant to the user)
     setOrder((prevOrder) => ({
       ...prevOrder,
       OrderItems: prevOrder.OrderItems.map((item) =>
@@ -92,17 +78,13 @@ const OrderDetails = () => {
       ),
     }));
 
-    // 2. Background database update
     try {
-      const token = sessionStorage.getItem("token");
-      await axios.put(
-        `${API_URL}/orders/admin/${id}/items/${itemId}/pack`,
-        { isPacked: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      await axiosInstance.put(`/orders/admin/${id}/items/${itemId}/pack`, {
+        isPacked: newStatus,
+      });
     } catch (error) {
-      toast.error("Failed to save packing status.");
-      fetchOrder(); // Revert back to database state if it fails
+      toast.error(error.message || "Failed to save packing status.");
+      fetchOrder();
     }
   };
 
@@ -121,7 +103,6 @@ const OrderDetails = () => {
 
   return (
     <div className="container-fluid mt-2">
-      {/* Page Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div className="d-flex align-items-center gap-3">
           <button
@@ -146,7 +127,6 @@ const OrderDetails = () => {
       </div>
 
       <div className="row g-4">
-        {/* LEFT COLUMN: Packing List */}
         <div className="col-md-8">
           <div className="card shadow-sm border-0">
             <div className="card-header bg-white py-3 border-bottom">
@@ -182,7 +162,6 @@ const OrderDetails = () => {
                       </span>
                     </div>
                   </div>
-                  {/* The Packing Checkbox */}
                   <div className="form-check me-3">
                     <input
                       className="form-check-input"
@@ -206,7 +185,6 @@ const OrderDetails = () => {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Customer Details & Actions */}
         <div className="col-md-4">
           <div className="card shadow-sm border-0 mb-4">
             <div className="card-body">

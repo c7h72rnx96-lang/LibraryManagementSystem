@@ -1,3 +1,4 @@
+// === src/models/Book.js ===
 import { DataTypes } from "sequelize";
 import { sequelize } from "../config/database.js";
 import Author from "./Author.js";
@@ -33,6 +34,13 @@ const Book = sequelize.define(
   {
     tableName: "books",
     timestamps: true,
+    // 🔥 The indexes array goes right here, inside the options object!
+    indexes: [
+      { fields: ["authorId"] },
+      { fields: ["genreId"] },
+      { fields: ["sellerId"] },
+      { fields: ["discountPercentage"] },
+    ],
   },
 );
 

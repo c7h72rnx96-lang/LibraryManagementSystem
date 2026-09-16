@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { fetchAPI } from "../../utils/api.js";
+import axiosInstance from "../../utils/axiosInstance.js";
 import toast from "react-hot-toast";
 import { FaUserPlus, FaEnvelopeOpenText, FaStore } from "react-icons/fa";
 
@@ -9,7 +9,6 @@ const Register = () => {
   const [step, setStep] = useState("register");
   const [loading, setLoading] = useState(false);
 
-  // Toggle between Customer and Seller
   const [accountType, setAccountType] = useState("customer");
 
   const [username, setUsername] = useState("");
@@ -17,7 +16,6 @@ const Register = () => {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
 
-  // Seller Specific Fields
   const [storeName, setStoreName] = useState("");
   const [storeDescription, setStoreDescription] = useState("");
 
@@ -26,29 +24,22 @@ const Register = () => {
     setLoading(true);
     try {
       if (accountType === "seller") {
-        // Registering as a Seller
-        await fetchAPI("/auth/register-seller", {
-          method: "POST",
-          body: JSON.stringify({
-            username,
-            email,
-            password,
-            storeName,
-            storeDescription,
-          }),
+        await axiosInstance.post("/auth/register-seller", {
+          username,
+          email,
+          password,
+          storeName,
+          storeDescription,
         });
-        // 🔥 Send Sellers to the verification screen!
-        toast.success("Verification code sent to your email!");
-        setStep("verify");
       } else {
-        // Registering as a Customer
-        await fetchAPI("/auth/register", {
-          method: "POST",
-          body: JSON.stringify({ username, email, password }),
+        await axiosInstance.post("/auth/register", {
+          username,
+          email,
+          password,
         });
-        toast.success("Verification code sent to your email!");
-        setStep("verify");
       }
+      toast.success("Verification code sent to your email!");
+      setStep("verify");
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -60,10 +51,7 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await fetchAPI("/auth/verify", {
-        method: "POST",
-        body: JSON.stringify({ email, code }),
-      });
+      await axiosInstance.post("/auth/verify", { email, code });
       toast.success("Account created successfully! You can now log in.");
       navigate("/login");
     } catch (error) {
@@ -127,7 +115,6 @@ const Register = () => {
               </p>
             </div>
 
-            {/* Account Type Toggle */}
             <div className="d-flex bg-dark rounded-pill p-1 mb-4 border border-secondary border-opacity-25">
               <button
                 type="button"
@@ -146,7 +133,6 @@ const Register = () => {
             </div>
 
             <form onSubmit={handleRegister}>
-              {/* Seller Specific Fields */}
               {accountType === "seller" && (
                 <>
                   <div className="mb-3">
@@ -185,7 +171,6 @@ const Register = () => {
                 </>
               )}
 
-              {/* Common Fields */}
               <div className="mb-3">
                 <label
                   className="form-label fw-bold text-light"
@@ -271,7 +256,6 @@ const Register = () => {
           </>
         ) : (
           <>
-            {/* VERIFY EMAIL STEP (Unchanged) */}
             <div className="text-center mb-4">
               <FaEnvelopeOpenText
                 size={45}

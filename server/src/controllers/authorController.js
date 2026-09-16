@@ -1,3 +1,4 @@
+// === src/controllers/authorController.js ===
 import { AuthorService } from "../services/authorService.js";
 
 export const getAllAuthors = async (req, res, next) => {

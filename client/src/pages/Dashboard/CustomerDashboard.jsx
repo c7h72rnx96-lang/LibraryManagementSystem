@@ -1,7 +1,6 @@
-// === src/pages/Dashboard/CustomerDashboard.jsx ===
 import React, { useState, useEffect, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import { AuthContext } from "../../context/AuthContext.jsx";
 import {
   FaDna,
@@ -18,8 +17,7 @@ import {
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
+const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
 
 const CustomerDashboard = () => {
   const { user } = useContext(AuthContext);
@@ -34,13 +32,10 @@ const CustomerDashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/orders/customer/dashboard`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axiosInstance.get("/orders/customer/dashboard");
       setStats(response.data);
     } catch (error) {
-      toast.error("Failed to load dashboard data.");
+      toast.error(error.message || "Failed to load dashboard data.");
     } finally {
       setLoading(false);
     }
@@ -59,7 +54,6 @@ const CustomerDashboard = () => {
       </div>
     );
 
-  // Destructure dynamic stats from the backend
   const {
     tier,
     loyaltyPoints,
@@ -67,7 +61,7 @@ const CustomerDashboard = () => {
     totalBooksRead,
     bookshelf,
     topGenre,
-    welcomeCoupon, // 🔥 Dynamically fetched from the database
+    welcomeCoupon,
   } = stats;
 
   const nextTierProgress = Math.min(
@@ -75,7 +69,6 @@ const CustomerDashboard = () => {
     Math.round((loyaltyPoints / tier.nextLimit) * 100),
   );
 
-  // 🔥 DYNAMIC COUPON VARIABLES
   const couponCode = welcomeCoupon?.code || "WELCOME10";
   const discountText = welcomeCoupon
     ? welcomeCoupon.discountType === "percentage"

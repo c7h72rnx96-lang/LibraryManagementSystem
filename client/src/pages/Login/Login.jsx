@@ -1,7 +1,7 @@
 import React, { useState, useContext } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom"; // <-- Added useLocation
 import { AuthContext } from "../../context/AuthContext.jsx";
-import { fetchAPI } from "../../utils/api.js";
+import axiosInstance from "../../utils/axiosInstance.js";
 import { FaBookOpen, FaUnlockAlt, FaKey, FaClock, FaBan } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -16,6 +16,10 @@ const Login = () => {
 
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation(); // <-- Get location
+
+  // Extract the prior path from history state (fallback to "/")
+  const from = location.state?.from?.pathname || "/";
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -24,11 +28,11 @@ const Login = () => {
     setLoading(false);
 
     if (result && result.success) {
-      navigate("/");
+      // 🔥 Redirect them where they actually intended to go
+      navigate(from, { replace: true });
     } else {
       const errorMsg = result?.error || "Login failed";
 
-      // 🔥 SMARTER CHECK: Looks for the word "pending" anywhere in the error!
       if (
         errorMsg === "PENDING_APPROVAL" ||
         errorMsg.toLowerCase().includes("pending")
@@ -40,19 +44,18 @@ const Login = () => {
       ) {
         setStep("rejected");
       } else {
-        toast.error(errorMsg); // Only show red toast for wrong passwords
+        toast.error(errorMsg);
       }
     }
   };
+
+  // ... (The rest of the handleForgotSubmit, handleResetSubmit and JSX return is completely identical)
 
   const handleForgotSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await fetchAPI("/auth/forgot-password", {
-        method: "POST",
-        body: JSON.stringify({ email: resetEmail }),
-      });
+      await axiosInstance.post("/auth/forgot-password", { email: resetEmail });
       toast.success("Reset code sent to your email!");
       setStep("reset");
     } catch (error) {
@@ -66,13 +69,10 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await fetchAPI("/auth/reset-password", {
-        method: "POST",
-        body: JSON.stringify({
-          email: resetEmail,
-          code: resetCode,
-          newPassword,
-        }),
+      await axiosInstance.post("/auth/reset-password", {
+        email: resetEmail,
+        code: resetCode,
+        newPassword,
       });
       toast.success("Password reset successfully! Please log in.");
       setStep("login");
@@ -186,7 +186,6 @@ const Login = () => {
           </>
         )}
 
-        {/* 🔥 BEAUTIFUL PENDING SCREEN */}
         {step === "pending_approval" && (
           <div className="text-center py-3">
             <FaClock
@@ -226,7 +225,6 @@ const Login = () => {
           </div>
         )}
 
-        {/* 🔥 BEAUTIFUL REJECTED SCREEN */}
         {step === "rejected" && (
           <div className="text-center py-3">
             <FaBan

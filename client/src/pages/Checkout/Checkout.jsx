@@ -1,19 +1,16 @@
-// === src/pages/Checkout/Checkout.jsx ===
 import React, { useState, useEffect, useContext } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import {
   FaTruck,
   FaCheckCircle,
   FaTag,
   FaCoins,
   FaReceipt,
-  FaLock, // <-- Added Lock Icon
+  FaLock,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import { AuthContext } from "../../context/AuthContext.jsx";
-
-const API_URL = import.meta.env.VITE_API_URL;
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -76,12 +73,9 @@ const Checkout = () => {
     if (!couponInput.trim()) return;
     setValidatingCoupon(true);
     try {
-      const token = sessionStorage.getItem("token");
-      const res = await axios.post(
-        `${API_URL}/coupons/validate`,
-        { code: couponInput, cartSubtotal: cartSubtotal },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      const res = await axiosInstance.post("/coupons/validate", {
+        code: couponInput,
+      });
 
       setAppliedCoupon(res.data);
       if (!res.data.isStackable) setUseLoyaltyPoints(false);
@@ -95,8 +89,8 @@ const Checkout = () => {
           `Coupon ${res.data.code} applied! Saved Rs. ${res.data.discountAmount}`,
         );
       }
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Invalid coupon code");
+    } catch (error) {
+      toast.error(error.message || "Invalid coupon code");
       setAppliedCoupon(null);
     } finally {
       setValidatingCoupon(false);
@@ -106,10 +100,9 @@ const Checkout = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    let toastId; // Keep track of the toast so we can close it!
+    let toastId;
 
     try {
-      const token = sessionStorage.getItem("token");
       const payload = {
         ...formData,
         cartItemIds,
@@ -117,9 +110,7 @@ const Checkout = () => {
         redeemPoints: loyaltyDiscount,
       };
 
-      const res = await axios.post(`${API_URL}/orders`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axiosInstance.post("/orders", payload);
 
       if (useLoyaltyPoints && loyaltyDiscount > 0) {
         setUser({ ...user, loyaltyPoints: availablePoints - loyaltyDiscount });
@@ -127,31 +118,30 @@ const Checkout = () => {
 
       if (formData.paymentMethod === "Stripe") {
         toastId = toast.loading("Redirecting to Secure Payment Gateway...");
-        const stripeRes = await axios.post(
-          `${API_URL}/payments/create-session`,
-          { orderId: res.data.orderId },
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        const stripeRes = await axiosInstance.post("/payments/create-session", {
+          orderId: res.data.orderId,
+        });
         window.location.href = stripeRes.data.url;
       } else {
         toast.success("Order placed successfully via COD!");
-        if (res.data.pointsEarned)
+        if (res.data.pointsEarned) {
           toast.success(
             `🎉 You earned ${res.data.pointsEarned} loyalty points!`,
           );
+        }
         navigate("/orders");
       }
     } catch (error) {
-      if (toastId) toast.dismiss(toastId); // 🔥 Clear the stuck notification
-      toast.error(error.response?.data?.message || "Failed to place order");
-      setLoading(false); // 🔥 Unlock the screen
+      if (toastId) toast.dismiss(toastId);
+      toast.error(error.message || "Failed to place order");
+      setLoading(false);
     }
   };
+
   if (cartItemIds.length === 0) return null;
 
   return (
     <div className="container mt-4 mb-5">
-      {/* 🔥 SECURE PAYMENT OVERLAY */}
       {loading && formData.paymentMethod === "Stripe" && (
         <div
           className="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center"

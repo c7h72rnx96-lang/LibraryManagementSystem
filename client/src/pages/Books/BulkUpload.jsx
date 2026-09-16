@@ -1,14 +1,9 @@
-// === src/pages/Books/BulkUpload.jsx ===
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import Papa from "papaparse";
 import toast from "react-hot-toast";
 import { FaCloudUploadAlt, FaArrowLeft, FaFileCsv } from "react-icons/fa";
-
-const API_URL = import.meta.env.VITE_API_URL;
-// Grab the API key from your .env file
-const GOOGLE_BOOKS_API_KEY = import.meta.env.VITE_GOOGLE_BOOKS_API_KEY;
+import axiosInstance from "../../utils/axiosInstance.js"; // <-- NEW
 
 const BulkUpload = () => {
   const navigate = useNavigate();
@@ -59,7 +54,7 @@ const BulkUpload = () => {
     return meta;
   }
 
-  // Mode 2: Smart Hybrid (Authenticated Google Books -> OpenLibrary Cover Fallback)
+  // SECURE Mode 2: Authenticated Google Books -> OpenLibrary Cover Fallback via Backend Proxy
   async function fetchTitleAuthorMetadata(title, author) {
     const defaultMeta = {
       description: "No description provided.",
@@ -68,32 +63,25 @@ const BulkUpload = () => {
     };
 
     let meta = { ...defaultMeta };
-    const googleQuery = `intitle:${encodeURIComponent(title)}+inauthor:${encodeURIComponent(author)}`;
 
-    // 1. Authenticated Google Books Request (No more 429 IP Bans!)
+    // 1. Authenticated Google Books Request (Proxied via Backend to hide API Key)
     try {
-      const fetchUrl = GOOGLE_BOOKS_API_KEY
-        ? `https://www.googleapis.com/books/v1/volumes?q=${googleQuery}&key=${GOOGLE_BOOKS_API_KEY}&maxResults=1`
-        : `https://www.googleapis.com/books/v1/volumes?q=${googleQuery}&maxResults=1`;
+      const response = await axiosInstance.get(
+        `/books/external-lookup?title=${encodeURIComponent(title)}+inauthor:${encodeURIComponent(author)}`,
+      );
+      const data = response.data;
 
-      const gbRes = await fetch(fetchUrl);
+      if (data.items && data.items.length > 0) {
+        const info = data.items[0].volumeInfo;
 
-      if (gbRes.ok) {
-        const data = await gbRes.json();
-        if (data.items && data.items.length > 0) {
-          const info = data.items[0].volumeInfo;
+        meta.description = info.description || meta.description;
+        meta.genreName = info.categories?.[0] || meta.genreName;
 
-          meta.description = info.description || meta.description;
-          meta.genreName = info.categories?.[0] || meta.genreName;
-
-          const coverImage =
-            info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail;
-          if (coverImage) {
-            meta.image = coverImage.replace("http:", "https:");
-          }
+        const coverImage =
+          info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail;
+        if (coverImage) {
+          meta.image = coverImage.replace("http:", "https:");
         }
-      } else {
-        console.warn(`Google API returned status: ${gbRes.status}`);
       }
     } catch (err) {
       console.warn("Google Books fetch failed. Falling back to OpenLibrary.");
@@ -112,7 +100,6 @@ const BulkUpload = () => {
           if (data.docs && data.docs.length > 0) {
             const docWithCover = data.docs.find((d) => d.cover_i);
 
-            // Rescue missing Cover Image
             if (docWithCover) {
               meta.image = `https://covers.openlibrary.org/b/id/${docWithCover.cover_i}-L.jpg`;
             }
@@ -201,19 +188,14 @@ const BulkUpload = () => {
                 externalGenre: genre,
               });
 
-              // With an API key, we can drop the delay to just 500ms making uploads super fast!
               await new Promise((resolve) => setTimeout(resolve, 500));
             }
           }
 
           setProgressText("Uploading books to database...");
-          const token = sessionStorage.getItem("token");
 
-          await axios.post(
-            `${API_URL}/books/bulk`,
-            { books: formattedBooks },
-            { headers: { Authorization: `Bearer ${token}` } },
-          );
+          // SECURE: axiosInstance handles the HttpOnly cookie automatically
+          await axiosInstance.post("/books/bulk", { books: formattedBooks });
 
           toast.success(
             `Successfully imported ${formattedBooks.length} books!`,

@@ -1,23 +1,19 @@
-// === server/src/services/bookService.js ===
-import Book from "../models/Book.js";
-import Author from "../models/Author.js";
-import Genre from "../models/Genre.js";
-import Review from "../models/Review.js";
-import User from "../models/User.js";
+// === src/services/bookService.js (Backend) ===
+import { Book, Author, Genre, Review, User } from "../models/index.js";
 import { Op } from "sequelize";
 
 export const BookService = {
-  getAllBooks: async (searchParam = "", genreParam = "") => {
-    let search = "";
-    let genreId = "";
-
-    if (typeof searchParam === "object" && searchParam !== null) {
-      search = searchParam.search || searchParam.author || "";
-      genreId = searchParam.genre || searchParam.genreId || "";
-    } else {
-      search = searchParam || "";
-      genreId = genreParam || "";
-    }
+  // 🔥 UPGRADED: Now accepts page and limit arguments
+  getAllBooks: async (
+    searchParam = "",
+    genreParam = "",
+    sellerIdParam = "",
+    page = 1,
+    limit = 12,
+  ) => {
+    let search = searchParam || "";
+    let genreId = genreParam || "";
+    let sellerId = sellerIdParam || "";
 
     const whereClause = {};
 
@@ -28,19 +24,30 @@ export const BookService = {
       ];
     }
 
-    if (genreId) {
-      whereClause.genreId = genreId;
-    }
+    if (genreId) whereClause.genreId = genreId;
+    if (sellerId) whereClause.sellerId = sellerId;
 
-    return await Book.findAll({
+    const offset = (page - 1) * limit;
+
+    // 🔥 UPGRADED: Uses findAndCountAll to power the pagination UI
+    const { rows, count } = await Book.findAndCountAll({
       where: whereClause,
       include: [
         { model: Author, attributes: ["id", "name"] },
         { model: Genre, attributes: ["id", "name"] },
       ],
-      order: [["id", "ASC"]],
-      subQuery: false,
+      order: [["createdAt", "DESC"]], // Show newest books first!
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      distinct: true,
     });
+
+    return {
+      books: rows,
+      totalItems: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: parseInt(page),
+    };
   },
 
   getBookById: async (id) => {
@@ -74,15 +81,11 @@ export const BookService = {
     return true;
   },
 
-  // 🔥 NEW: Bulk Delete from Database
   deleteBulkBooks: async (ids, userId, role) => {
     const whereClause = { id: { [Op.in]: ids } };
-
-    // Security: If the user is a Seller, ONLY allow them to delete books they own
     if (role !== "admin") {
       whereClause.sellerId = userId;
     }
-
     const deletedCount = await Book.destroy({ where: whereClause });
     return deletedCount;
   },

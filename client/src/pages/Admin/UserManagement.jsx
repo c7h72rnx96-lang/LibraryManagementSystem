@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from "react";
-import axios from "axios";
-import { useNavigate } from "react-router-dom"; // 🔥 1. Added useNavigate
+import axiosInstance from "../../utils/axiosInstance.js";
+import { useNavigate } from "react-router-dom";
 import {
   FaUserShield,
   FaBan,
@@ -14,18 +14,15 @@ import {
 import toast from "react-hot-toast";
 import { AuthContext } from "../../context/AuthContext.jsx";
 
-const API_URL = import.meta.env.VITE_API_URL;
-
 const UserManagement = () => {
   const { user } = useContext(AuthContext);
-  const navigate = useNavigate(); // 🔥 2. Initialized navigate
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Tabs & Modal State
-  const [activeTab, setActiveTab] = useState("active"); // "active" or "pending"
+  const [activeTab, setActiveTab] = useState("active");
   const [selectedSeller, setSelectedSeller] = useState(null);
-  const [commissionRate, setCommissionRate] = useState(10); // Default 10%
+  const [commissionRate, setCommissionRate] = useState(10);
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
@@ -34,14 +31,10 @@ const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/admin/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axiosInstance.get("/admin/users");
       setUsers(response.data);
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to load users");
+      toast.error(error.message || "Failed to load users");
     } finally {
       setLoading(false);
     }
@@ -49,11 +42,9 @@ const UserManagement = () => {
 
   const handleToggleBlock = async (userId, currentStatus) => {
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.put(
-        `${API_URL}/admin/users/${userId}/block`,
+      const response = await axiosInstance.put(
+        `/admin/users/${userId}/block`,
         {},
-        { headers: { Authorization: `Bearer ${token}` } },
       );
       toast.success(response.data.message);
       setUsers(
@@ -62,26 +53,23 @@ const UserManagement = () => {
         ),
       );
     } catch (error) {
-      toast.error(
-        error.response?.data?.message || "Failed to update user status",
-      );
+      toast.error(error.message || "Failed to update user status");
     }
   };
 
-  // 🔥 THE SELLER APPROVAL LOGIC
   const handleReviewSubmit = async (status) => {
     setProcessing(true);
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.put(
-        `${API_URL}/admin/users/${selectedSeller.id}/approve`,
-        { status, commissionRate: Number(commissionRate) },
-        { headers: { Authorization: `Bearer ${token}` } },
+      const response = await axiosInstance.put(
+        `/admin/users/${selectedSeller.id}/approve`,
+        {
+          status,
+          commissionRate: Number(commissionRate),
+        },
       );
 
       toast.success(response.data.message);
 
-      // Update UI instantly
       setUsers(
         users.map((u) =>
           u.id === selectedSeller.id
@@ -94,12 +82,10 @@ const UserManagement = () => {
         ),
       );
 
-      setSelectedSeller(null); // Close Modal
-
-      // If no pending left, switch back to active tab
+      setSelectedSeller(null);
       if (pendingSellers.length <= 1) setActiveTab("active");
     } catch (error) {
-      toast.error("Failed to review application");
+      toast.error(error.message || "Failed to review application");
     } finally {
       setProcessing(false);
     }
@@ -113,7 +99,6 @@ const UserManagement = () => {
     );
   }
 
-  // Filter users based on tabs
   const pendingSellers = users.filter(
     (u) => u.role === "seller" && u.storeStatus === "pending",
   );
@@ -127,7 +112,6 @@ const UserManagement = () => {
         <FaUserShield className="me-3 text-info" /> User & Store Management
       </h2>
 
-      {/* Tabs */}
       <div className="d-flex gap-3 mb-4 border-bottom border-secondary border-opacity-25 pb-3">
         <button
           onClick={() => setActiveTab("active")}
@@ -155,7 +139,6 @@ const UserManagement = () => {
           backdropFilter: "blur(20px)",
         }}
       >
-        {/* ACTIVE USERS TAB */}
         {activeTab === "active" && (
           <div className="table-responsive">
             <table
@@ -175,10 +158,10 @@ const UserManagement = () => {
                 {activeUsers.map((u) => (
                   <tr
                     key={u.id}
-                    onClick={() => navigate(`/manage-users/${u.id}`)} // 🔥 3. MAKE ROW CLICKABLE
+                    onClick={() => navigate(`/manage-users/${u.id}`)}
                     style={{
                       borderBottom: "1px solid rgba(255,255,255,0.05)",
-                      cursor: "pointer", // 🔥 4. POINTER CURSOR
+                      cursor: "pointer",
                     }}
                     className="hover-bg-dark"
                   >
@@ -240,7 +223,7 @@ const UserManagement = () => {
                       {u.role !== "admin" && (
                         <button
                           onClick={(e) => {
-                            e.stopPropagation(); // 🔥 5. PREVENTS ROW CLICK
+                            e.stopPropagation();
                             handleToggleBlock(u.id, u.isBlocked);
                           }}
                           className={`btn btn-sm fw-bold rounded-pill px-3 ${u.isBlocked ? "btn-outline-success" : "btn-outline-danger"}`}
@@ -270,7 +253,6 @@ const UserManagement = () => {
           </div>
         )}
 
-        {/* PENDING APPLICATIONS TAB */}
         {activeTab === "pending" && (
           <div className="p-4">
             {pendingSellers.length === 0 ? (
@@ -336,7 +318,6 @@ const UserManagement = () => {
         )}
       </div>
 
-      {/* 🔥 THE REVIEW MODAL (Custom Overlay) */}
       {selectedSeller && (
         <div
           className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"

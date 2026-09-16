@@ -9,7 +9,7 @@
     "dev": "nodemon src/server.js",
     "db:sync": "node src/scripts/syncDb.js",
     "admin:create": "node src/scripts/createAdmin.js",
-    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --detectOpenHandles"
+    "test": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --detectOpenHandles --forceExit"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +17,8 @@
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cloudinary": "^1.41.3",
+    "cookie": "^2.0.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
@@ -34,7 +36,6 @@
     "resend": "^6.20.0",
     "sequelize": "^6.37.7",
     "socket.io": "^4.8.3",
-    "sqlite3": "^5.1.7",
     "stripe": "^22.6.0",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1"
@@ -43,6 +44,7 @@
     "cross-env": "^10.1.0",
     "jest": "^30.5.1",
     "nodemon": "^3.1.10",
+    "sqlite3": "^6.0.1",
     "supertest": "^7.2.2"
   },
   "engines": {

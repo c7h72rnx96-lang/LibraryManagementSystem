@@ -1,6 +1,8 @@
 import React, { useState, useContext } from "react";
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext.jsx";
+import axiosInstance from "../utils/axiosInstance.js";
+import { useQuery } from "@tanstack/react-query"; // <-- Imported useQuery
 import {
   FaBook,
   FaUsers,
@@ -21,7 +23,7 @@ import {
   FaTicketAlt,
   FaMoneyCheckAlt,
   FaShieldAlt,
-  FaHeadset, // <-- Added Headset icon
+  FaHeadset,
 } from "react-icons/fa";
 
 const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
@@ -32,6 +34,14 @@ const WorkspaceLayout = () => {
   const location = useLocation();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // 🔥 NEW: Fetch Unread Chat Count for Admins & Sellers
+  const { data: unreadData } = useQuery({
+    queryKey: ["unreadChats"],
+    queryFn: async () => (await axiosInstance.get("/chat/unread")).data,
+    enabled: !!user,
+  });
+  const unreadCount = unreadData?.unreadCount || 0;
 
   const handleLogout = () => {
     logout();
@@ -262,7 +272,7 @@ const WorkspaceLayout = () => {
                     <FaClipboardList className="me-3 fs-5" /> Store Orders
                   </Link>
                 </li>
-                {/* 🔥 NEW: Store Inbox added to Seller sidebar */}
+                {/* 🔥 UPDATED: Store Inbox with UNREAD BADGE */}
                 <li className="nav-item">
                   <Link
                     to="/support"
@@ -273,6 +283,11 @@ const WorkspaceLayout = () => {
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <FaHeadset className="me-3 fs-5 text-info" /> Store Inbox
+                    {unreadCount > 0 && (
+                      <span className="badge bg-danger ms-auto rounded-pill">
+                        {unreadCount}
+                      </span>
+                    )}
                   </Link>
                 </li>
                 <li className="nav-item">
@@ -460,7 +475,7 @@ const WorkspaceLayout = () => {
                     <FaMoneyCheckAlt className="me-3 fs-5" /> Seller Payouts
                   </Link>
                 </li>
-                {/* 🔥 NEW: Platform Support Desk added to Admin sidebar */}
+                {/* 🔥 UPDATED: Support Desk with UNREAD BADGE */}
                 <li className="nav-item">
                   <Link
                     to="/support"
@@ -471,6 +486,11 @@ const WorkspaceLayout = () => {
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <FaHeadset className="me-3 fs-5 text-info" /> Support Desk
+                    {unreadCount > 0 && (
+                      <span className="badge bg-danger ms-auto rounded-pill">
+                        {unreadCount}
+                      </span>
+                    )}
                   </Link>
                 </li>
                 <li className="nav-item">

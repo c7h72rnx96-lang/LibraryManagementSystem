@@ -1,24 +1,25 @@
-import { fetchAPI } from "../utils/api.js";
+import axiosInstance from "../utils/axiosInstance.js";
 
 const GenreService = {
-  getAll: () => fetchAPI("/genres"),
+  getAll: async () => {
+    const response = await axiosInstance.get("/genres");
+    return response.data;
+  },
 
-  create: (data) =>
-    fetchAPI("/genres", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
+  create: async (data) => {
+    const response = await axiosInstance.post("/genres", data);
+    return response.data;
+  },
 
-  update: (id, data) =>
-    fetchAPI(`/genres/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
+  update: async (id, data) => {
+    const response = await axiosInstance.put(`/genres/${id}`, data);
+    return response.data;
+  },
 
-  delete: (id) =>
-    fetchAPI(`/genres/${id}`, {
-      method: "DELETE",
-    }),
+  delete: async (id) => {
+    const response = await axiosInstance.delete(`/genres/${id}`);
+    return response.data;
+  },
 };
 
 export default GenreService;

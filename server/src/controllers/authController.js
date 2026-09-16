@@ -1,22 +1,132 @@
+// === src/controllers/authController.js ===
 import bcrypt from "bcrypt";
 import { User } from "../models/index.js";
 import { AuthService } from "../services/authService.js";
-import { sendVerificationEmail } from "../config/mailer.js"; // <-- ADDED MAILER IMPORT
+import { UserService } from "../services/UserService.js"; // <-- NEW
+import { sendVerificationEmail } from "../config/mailer.js";
 
+// ==========================================
+// COOKIE HELPER
+// ==========================================
+const setAuthCookie = (res, token) => {
+  const isProd = process.env.NODE_ENV === "production";
+  res.cookie("token", token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+    // REMOVE or comment out the maxAge line below!
+    // maxAge: 24 * 60 * 60 * 1000,
+  });
+};
+
+// ==========================================
+// LOGIN & LOGOUT
+// ==========================================
 export const login = async (req, res) => {
   try {
     const result = await AuthService.login(req.body.email, req.body.password);
-    res.status(200).json(result);
+    setAuthCookie(res, result.token);
+    res.status(200).json({ user: result.user, message: "Login successful" });
   } catch (err) {
     res.status(401).json({ error: err.message });
   }
 };
 
+export const logout = (req, res) => {
+  const isProd = process.env.NODE_ENV === "production";
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+  });
+  res.status(200).json({ message: "Logged out successfully" });
+};
+
+// ==========================================
+// PROFILE MANAGEMENT (NEW THIN CONTROLLERS)
+// ==========================================
+export const getMe = async (req, res, next) => {
+  try {
+    const user = await UserService.getProfile(req.user.id);
+    res.status(200).json(user);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getProfile = async (req, res, next) => {
+  try {
+    const user = await UserService.getProfile(req.user.id);
+    res.status(200).json(user);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateProfile = async (req, res, next) => {
+  try {
+    const result = await UserService.updateProfile(
+      req.user.id,
+      req.body,
+      req.file,
+    );
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ==========================================
+// REGISTRATION & VERIFICATION
+// ==========================================
 export const register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
     const result = await AuthService.register(username, email, password);
     res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+export const registerSeller = async (req, res) => {
+  try {
+    const { username, email, password, storeName, storeDescription } = req.body;
+
+    let user = await User.findOne({ where: { email } });
+    if (user) {
+      if (user.isVerified)
+        return res.status(400).json({ error: "Email already registered." });
+      await user.destroy();
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const verificationCode = Math.floor(
+      100000 + Math.random() * 900000,
+    ).toString();
+    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    user = await User.create({
+      username,
+      email,
+      password: hashedPassword,
+      role: "seller",
+      storeName,
+      storeDescription,
+      isVerified: false,
+      verificationCode,
+      codeExpiresAt,
+      storeStatus: "pending",
+    });
+
+    console.log(
+      `\n📧 VERIFICATION CODE FOR SELLER ${email}: [ ${verificationCode} ]\n`,
+    );
+    await sendVerificationEmail(user.email, verificationCode).catch((err) =>
+      console.log("Email provider blocked sending, but code is in terminal."),
+    );
+
+    res.status(201).json({ message: "Verification code sent to your email." });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -32,76 +142,9 @@ export const verify = async (req, res) => {
   }
 };
 
-export const getProfile = async (req, res) => {
-  try {
-    const user = await User.findByPk(req.user.id, {
-      attributes: { exclude: ["password"] },
-    });
-
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    res.status(200).json(user);
-  } catch (error) {
-    console.error("Get Profile Error:", error);
-    res.status(500).json({ message: "Server error fetching profile" });
-  }
-};
-
-export const updateProfile = async (req, res) => {
-  try {
-    // 🔥 Added storeName and storeDescription to the extracted body
-    const {
-      username,
-      email,
-      phone,
-      address,
-      city,
-      storeName,
-      storeDescription,
-    } = req.body;
-    const user = await User.findByPk(req.user.id);
-
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    user.username = username || user.username;
-    user.email = email || user.email;
-    user.phone = phone || user.phone;
-    user.address = address || user.address;
-    user.city = city || user.city;
-
-    // 🔥 Only update these if the user is actually a seller
-    if (user.role === "seller") {
-      user.storeName = storeName || user.storeName;
-      user.storeDescription = storeDescription || user.storeDescription;
-    }
-
-    if (req.file) {
-      user.avatar = req.file.path;
-    }
-
-    await user.save();
-
-    res.status(200).json({
-      message: "Profile updated successfully!",
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        phone: user.phone,
-        avatar: user.avatar,
-        address: user.address,
-        city: user.city,
-        storeName: user.storeName, // Send back updated store data
-        loyaltyPoints: user.loyaltyPoints,
-      },
-    });
-  } catch (error) {
-    console.error("Update Profile Error:", error);
-    res.status(500).json({ message: "Server error updating profile" });
-  }
-};
-
+// ==========================================
+// PASSWORD MANAGEMENT
+// ==========================================
 export const forgotPassword = async (req, res) => {
   try {
     const result = await AuthService.forgotPassword(req.body.email);
@@ -130,54 +173,6 @@ export const changePassword = async (req, res) => {
       newPassword,
     );
     res.status(200).json(result);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-};
-
-// ==========================================
-// REGISTER SELLER (NOW REQUIRES EMAIL VERIFICATION)
-// ==========================================
-export const registerSeller = async (req, res) => {
-  try {
-    const { username, email, password, storeName, storeDescription } = req.body;
-
-    let user = await User.findOne({ where: { email } });
-    if (user) {
-      if (user.isVerified)
-        return res.status(400).json({ error: "Email already registered." });
-      await user.destroy(); // Wipe unverified old attempts
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const verificationCode = Math.floor(
-      100000 + Math.random() * 900000,
-    ).toString();
-    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-    user = await User.create({
-      username,
-      email,
-      password: hashedPassword,
-      role: "seller",
-      storeName,
-      storeDescription,
-      isVerified: false, // 🔥 SELLER MUST NOW VERIFY EMAIL
-      verificationCode,
-      codeExpiresAt,
-      storeStatus: "pending",
-    });
-
-    console.log(
-      `\n📧 VERIFICATION CODE FOR SELLER ${email}: [ ${verificationCode} ]\n`,
-    );
-    await sendVerificationEmail(user.email, verificationCode).catch((err) =>
-      console.log("Email provider blocked sending, but code is in terminal."),
-    );
-
-    res.status(201).json({
-      message: "Verification code sent to your email.",
-    });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

@@ -1,4 +1,3 @@
-// === server/src/routes/bookRoutes.js ===
 import { Router } from "express";
 import upload from "../config/multer.js";
 import {
@@ -10,20 +9,28 @@ import {
   addReview,
   getRecommendations,
   createBulkBooks,
-  deleteBulkBooks, // <-- Add this import
+  deleteBulkBooks,
+  lookupExternalBook, // <-- Imported proxy controller
 } from "../controllers/bookController.js";
 import { authenticate, authorize } from "../middleware/auth.js";
+import { actionLimiter } from "../middleware/rateLimiter.js";
 
 const router = Router();
 
-// Bulk Routes (MUST go before /:id routes!)
+// ==========================================
+// 1. SPECIFIC ROUTES (Must go first!)
+// ==========================================
+
+// 🔥 SECURE PROXY: Must be placed ABOVE /:id so Express doesn't treat "external-lookup" as an ID
+router.get("/external-lookup", authenticate, actionLimiter, lookupExternalBook);
+
+// Bulk Actions
 router.post(
   "/bulk",
   authenticate,
   authorize("admin", "seller"),
   createBulkBooks,
 );
-// 🔥 NEW: Bulk Delete Route
 router.delete(
   "/bulk",
   authenticate,
@@ -31,7 +38,11 @@ router.delete(
   deleteBulkBooks,
 );
 
-// Everyone can view books
+// ==========================================
+// 2. DYNAMIC /:id ROUTES (Must go after specific routes!)
+// ==========================================
+
+// Everyone can view books & recommendations
 router.get("/:id/recommendations", getRecommendations);
 router.get("/", getAllBooks);
 router.get("/:id", getBookById);

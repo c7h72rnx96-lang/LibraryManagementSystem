@@ -1,53 +1,76 @@
 import React, { createContext, useState, useEffect } from "react";
-import { fetchAPI } from "../utils/api.js";
+import axiosInstance from "../utils/axiosInstance.js";
 import toast from "react-hot-toast";
 
 export const AuthContext = createContext();
+
+const authChannel = new BroadcastChannel("auth_sync_channel");
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = sessionStorage.getItem("user");
-    const storedToken = sessionStorage.getItem("token");
-
-    if (storedUser && storedToken) {
+    const checkSession = async () => {
       try {
-        setUser(JSON.parse(storedUser));
+        const response = await axiosInstance.get("/auth/me");
+        setUser(response.data);
       } catch (error) {
-        sessionStorage.removeItem("user");
-        sessionStorage.removeItem("token");
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    };
+    checkSession();
+
+    // 1. Listen for cross-tab logins/logouts
+    const handleMessage = (event) => {
+      if (event.data.type === "LOGIN") {
+        setUser(event.data.user);
+      } else if (event.data.type === "LOGOUT") {
+        setUser(null);
+      }
+    };
+    authChannel.addEventListener("message", handleMessage);
+
+    // 2. Listen for current-tab 401 expirations from Axios
+    const handleSessionExpired = () => {
+      setUser(null);
+    };
+    window.addEventListener("session-expired", handleSessionExpired);
+
+    return () => {
+      authChannel.removeEventListener("message", handleMessage);
+      window.removeEventListener("session-expired", handleSessionExpired);
+    };
   }, []);
 
   const login = async (email, password) => {
     try {
-      const data = await fetchAPI("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
+      const response = await axiosInstance.post("/auth/login", {
+        email,
+        password,
       });
 
-      sessionStorage.setItem("token", data.token);
-      sessionStorage.setItem("user", JSON.stringify(data.user));
-
-      setUser(data.user);
+      setUser(response.data.user);
+      authChannel.postMessage({ type: "LOGIN", user: response.data.user });
       toast.success("Login successful!");
       return { success: true };
     } catch (error) {
-      // 🔥 WE REMOVED THE TOAST HERE!
-      // Now it passes the error back to the Login page silently.
       return { success: false, error: error.message };
     }
   };
 
-  const logout = () => {
-    sessionStorage.removeItem("token");
-    sessionStorage.removeItem("user");
-    setUser(null);
-    toast.success("Logged out successfully!");
+  const logout = async () => {
+    try {
+      await axiosInstance.post("/auth/logout");
+    } catch (err) {
+      console.error("Logout request failed", err);
+    } finally {
+      setUser(null);
+      authChannel.postMessage({ type: "LOGOUT" });
+      toast.success("Logged out successfully!");
+    }
   };
 
   return (

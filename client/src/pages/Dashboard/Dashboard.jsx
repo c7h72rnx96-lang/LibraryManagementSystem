@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import { AuthContext } from "../../context/AuthContext.jsx";
 import {
   FaBook,
   FaMoneyBillWave,
   FaBoxOpen,
-  FaExclamationTriangle,
   FaClock,
   FaBookReader,
   FaHeart,
   FaFire,
-  FaTrophy,
   FaArrowRight,
   FaBolt,
   FaStar,
@@ -19,7 +17,7 @@ import {
   FaCheck,
   FaPlus,
   FaCoins,
-  FaStore, // <-- ADDED FaStore
+  FaStore,
 } from "react-icons/fa";
 import {
   LineChart,
@@ -35,8 +33,7 @@ import {
   Legend,
 } from "recharts";
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
+const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
 const COLORS = ["#a855f7", "#ec4899", "#3b82f6", "#10b981"];
 
 const Dashboard = () => {
@@ -71,12 +68,10 @@ const Dashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/orders/admin/stats`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axiosInstance.get("/orders/admin/stats");
       setStats(response.data);
     } catch (error) {
+      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -84,15 +79,10 @@ const Dashboard = () => {
 
   const fetchCustomerData = async () => {
     try {
-      const token = sessionStorage.getItem("token");
       const [ordersRes, booksRes, wishlistRes] = await Promise.all([
-        axios.get(`${API_URL}/orders`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`${API_URL}/books`),
-        axios.get(`${API_URL}/wishlist`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+        axiosInstance.get("/orders"),
+        axiosInstance.get("/books"),
+        axiosInstance.get("/wishlist"),
       ]);
       setOrders(ordersRes.data);
       setWishlistCount(wishlistRes.data.length);
@@ -102,6 +92,7 @@ const Dashboard = () => {
         .slice(0, 4);
       setHotBooks(discounted);
     } catch (error) {
+      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -159,9 +150,6 @@ const Dashboard = () => {
       </div>
     );
 
-  // =======================================
-  // 1. ADMIN DASHBOARD UI
-  // =======================================
   if (user?.role === "admin") {
     return (
       <div className="container-fluid mt-2">
@@ -341,9 +329,6 @@ const Dashboard = () => {
     );
   }
 
-  // =======================================
-  // 2. SELLER DASHBOARD UI
-  // =======================================
   let sellerContent = null;
   if (user?.role === "seller") {
     sellerContent = (
@@ -427,7 +412,6 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              {/* 🔥 SPLIT BUTTONS ADDED HERE */}
               <div className="d-flex gap-2 mt-auto">
                 <button
                   onClick={() => navigate("/seller/books")}
@@ -442,7 +426,6 @@ const Dashboard = () => {
                   <FaStore className="me-2" /> My Store
                 </button>
               </div>
-              {/* 🔥 END SPLIT BUTTONS */}
             </div>
           </div>
         </div>
@@ -450,9 +433,6 @@ const Dashboard = () => {
     );
   }
 
-  // =======================================
-  // 3. CUSTOMER DASHBOARD UI
-  // =======================================
   const purchasedBooks = orders.flatMap((order) =>
     order.OrderItems.map((item) => item.Book),
   );
@@ -499,10 +479,8 @@ const Dashboard = () => {
         `}
       </style>
 
-      {/* Render Seller Panel if they are a seller! */}
       {sellerContent}
 
-      {/* 🔮 DYNAMIC AURA HERO SECTION */}
       <div
         className="card border-0 mb-5 rounded-4 overflow-hidden text-white aura-bg position-relative"
         style={{ background: aura.bg }}
@@ -587,7 +565,6 @@ const Dashboard = () => {
       </div>
 
       <div className="row g-4">
-        {/* VIRTUAL BOOKSHELF */}
         <div className="col-lg-8">
           <div className="d-flex justify-content-between align-items-end mb-4">
             <h4 className="fw-bold m-0 d-flex align-items-center text-white">
@@ -781,7 +758,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* 🔥 TRENDING NOW */}
         <div className="col-lg-4">
           <h4 className="fw-bold mb-4 d-flex align-items-center text-white">
             <FaFire className="me-2 text-danger fire-pulse" /> Trending Now

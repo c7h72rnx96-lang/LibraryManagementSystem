@@ -1,6 +1,5 @@
-// === src/pages/Coupons/Coupons.jsx ===
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import {
   FaTicketAlt,
   FaPlus,
@@ -10,8 +9,6 @@ import {
   FaPercent,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
-
-const API_URL = import.meta.env.VITE_API_URL;
 
 const Coupons = () => {
   const [coupons, setCoupons] = useState([]);
@@ -24,8 +21,8 @@ const Coupons = () => {
     discountType: "percentage",
     discountValue: "",
     minOrderAmount: 0,
-    maxDiscountAmount: "", // 🔥 Added back
-    usageLimit: 100, // 🔥 Added back
+    maxDiscountAmount: "",
+    usageLimit: 100,
     expiresAt: "",
     sponsor: "platform",
     isStackable: false,
@@ -39,13 +36,10 @@ const Coupons = () => {
 
   const fetchCoupons = async () => {
     try {
-      const token = sessionStorage.getItem("token");
-      const res = await axios.get(`${API_URL}/coupons`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axiosInstance.get("/coupons");
       setCoupons(res.data);
     } catch (error) {
-      toast.error("Failed to load coupons");
+      toast.error(error.message || "Failed to load coupons");
     } finally {
       setLoading(false);
     }
@@ -55,7 +49,6 @@ const Coupons = () => {
     e.preventDefault();
     setSaving(true);
 
-    // Clean up empty strings to pass null to the backend
     const payload = {
       ...formData,
       maxDiscountAmount:
@@ -64,15 +57,12 @@ const Coupons = () => {
     };
 
     try {
-      const token = sessionStorage.getItem("token");
-      await axios.post(`${API_URL}/coupons`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axiosInstance.post("/coupons", payload);
       toast.success("Promo code created successfully!");
       setShowModal(false);
       fetchCoupons();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to create coupon");
+      toast.error(error.message || "Failed to create coupon");
     } finally {
       setSaving(false);
     }
@@ -80,29 +70,21 @@ const Coupons = () => {
 
   const handleToggle = async (id) => {
     try {
-      const token = sessionStorage.getItem("token");
-      await axios.put(
-        `${API_URL}/coupons/${id}/toggle`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      await axiosInstance.put(`/coupons/${id}/toggle`, {});
       fetchCoupons();
     } catch (error) {
-      toast.error("Failed to update status");
+      toast.error(error.message || "Failed to update status");
     }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Permanently delete this promo code?")) return;
     try {
-      const token = sessionStorage.getItem("token");
-      await axios.delete(`${API_URL}/coupons/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axiosInstance.delete(`/coupons/${id}`);
       toast.success("Coupon deleted!");
       fetchCoupons();
     } catch (error) {
-      toast.error("Failed to delete coupon");
+      toast.error(error.message || "Failed to delete coupon");
     }
   };
 
@@ -203,7 +185,6 @@ const Coupons = () => {
                         ? "FREE DELIVERY"
                         : `Rs. ${c.discountValue} OFF`}
 
-                    {/* 🔥 Shows Max Discount Cap in the table if it exists */}
                     {c.maxDiscountAmount && c.discountType === "percentage" && (
                       <small className="d-block text-warning fw-bold mt-1">
                         Up to Rs. {c.maxDiscountAmount}
@@ -320,7 +301,6 @@ const Coupons = () => {
                         setFormData({
                           ...formData,
                           discountType: e.target.value,
-                          // Clear max discount if they switch away from percentage
                           maxDiscountAmount:
                             e.target.value !== "percentage"
                               ? ""
@@ -372,8 +352,6 @@ const Coupons = () => {
                       min="0"
                     />
                   </div>
-
-                  {/* 🔥 MAX DISCOUNT ADDED BACK IN */}
                   <div className="col-6">
                     <label className="form-label text-light fw-bold small">
                       MAX DISCOUNT (Rs.)
@@ -400,7 +378,6 @@ const Coupons = () => {
                 </div>
 
                 <div className="row g-3 mb-4">
-                  {/* 🔥 USAGE LIMIT ADDED BACK IN */}
                   <div className="col-6">
                     <label className="form-label text-light fw-bold small">
                       USAGE LIMIT
@@ -416,7 +393,6 @@ const Coupons = () => {
                       min="1"
                     />
                   </div>
-
                   <div className="col-6">
                     <label className="form-label text-light fw-bold small">
                       SPONSOR (Who Pays?)
@@ -441,7 +417,6 @@ const Coupons = () => {
                   <h6 className="fw-bold text-info small mb-3">
                     ENTERPRISE RULES
                   </h6>
-
                   <div className="form-check form-switch mb-2">
                     <input
                       className="form-check-input"
@@ -462,7 +437,6 @@ const Coupons = () => {
                       Allow stacking with Loyalty Points
                     </label>
                   </div>
-
                   <div className="form-check form-switch mb-2">
                     <input
                       className="form-check-input"
@@ -483,7 +457,6 @@ const Coupons = () => {
                       First-Time Buyers Only
                     </label>
                   </div>
-
                   <div className="form-check form-switch">
                     <input
                       className="form-check-input"

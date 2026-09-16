@@ -1,18 +1,16 @@
-// === src/pages/Orders/SellerOrders.jsx ===
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import {
   FaBoxOpen,
   FaMapMarkerAlt,
   FaCheckCircle,
   FaUser,
   FaPhoneAlt,
-  FaPrint, // <-- Added Print Icon
+  FaPrint,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
+const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
 
 const SellerOrders = () => {
   const [orderItems, setOrderItems] = useState([]);
@@ -24,14 +22,10 @@ const SellerOrders = () => {
 
   const fetchSellerOrders = async () => {
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/orders/seller`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axiosInstance.get("/orders/seller");
       setOrderItems(response.data);
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to load your store orders");
+      toast.error(error.message || "Failed to load your store orders");
     } finally {
       setLoading(false);
     }
@@ -40,7 +34,6 @@ const SellerOrders = () => {
   const togglePack = async (orderId, itemId, currentStatus) => {
     const newStatus = !currentStatus;
 
-    // Optimistic UI Update
     setOrderItems((prevItems) =>
       prevItems.map((item) =>
         item.id === itemId
@@ -54,26 +47,20 @@ const SellerOrders = () => {
     );
 
     try {
-      const token = sessionStorage.getItem("token");
-      await axios.put(
-        `${API_URL}/orders/admin/${orderId}/items/${itemId}/pack`,
-        { isPacked: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      await axiosInstance.put(`/orders/admin/${orderId}/items/${itemId}/pack`, {
+        isPacked: newStatus,
+      });
       toast.success(newStatus ? "Item marked as Packed!" : "Item unmarked.");
     } catch (error) {
-      toast.error("Failed to update packing status");
-      fetchSellerOrders(); // Revert on failure
+      toast.error(error.message || "Failed to update packing status");
+      fetchSellerOrders();
     }
   };
 
-  // 🔥 NEW: Download PDF Packing Slip
   const handleDownloadInvoice = async (orderId) => {
     const toastId = toast.loading("Generating Packing Slip...");
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/orders/${orderId}/invoice`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const response = await axiosInstance.get(`/orders/${orderId}/invoice`, {
         responseType: "blob",
       });
 
@@ -86,7 +73,9 @@ const SellerOrders = () => {
       link.remove();
       toast.success("Packing slip downloaded!", { id: toastId });
     } catch (error) {
-      toast.error("Failed to download packing slip", { id: toastId });
+      toast.error(error.message || "Failed to download packing slip", {
+        id: toastId,
+      });
     }
   };
 
@@ -125,11 +114,10 @@ const SellerOrders = () => {
               <div
                 className="card shadow-lg border-0 rounded-4 overflow-hidden h-100"
                 style={{
-                  background: "#161b2b", // Matches screenshot dark blue/gray
+                  background: "#161b2b",
                   border: "1px solid rgba(255,255,255,0.05)",
                 }}
               >
-                {/* Header: Order Info & Earnings */}
                 <div
                   className="card-header border-bottom py-3 d-flex justify-content-between align-items-center"
                   style={{
@@ -149,7 +137,6 @@ const SellerOrders = () => {
                     </small>
                   </div>
 
-                  {/* 🔥 UPDATED: Earnings + PDF Print Button Layout */}
                   <div className="text-end d-flex flex-column align-items-end">
                     <span
                       className="text-muted small fw-bold d-block text-uppercase"
@@ -175,7 +162,6 @@ const SellerOrders = () => {
 
                 <div className="card-body p-4">
                   <div className="row g-0 h-100 align-items-center">
-                    {/* Left: Book Image & Details */}
                     <div className="col-md-6 border-end border-secondary border-opacity-25 pe-md-4">
                       <div className="d-flex align-items-start gap-3 mb-4">
                         <img
@@ -209,7 +195,6 @@ const SellerOrders = () => {
                         </div>
                       </div>
 
-                      {/* The Toggle Switch matching the screenshot */}
                       <div
                         className="d-flex align-items-center p-2 rounded px-3"
                         style={{
@@ -260,7 +245,6 @@ const SellerOrders = () => {
                       </div>
                     </div>
 
-                    {/* Right: Shipping Info */}
                     <div className="col-md-6 ps-md-4 mt-4 mt-md-0 d-flex flex-column justify-content-center h-100">
                       <div className="d-flex align-items-center mb-2 text-primary">
                         <FaUser className="me-2" size={14} />
@@ -268,14 +252,12 @@ const SellerOrders = () => {
                           Ship To:
                         </span>
                       </div>
-
                       <p
                         className="mb-2 text-white fw-semibold ms-4 ps-1"
                         style={{ fontSize: "14px" }}
                       >
                         {item.Order.fullName}
                       </p>
-
                       <div className="d-flex align-items-start mb-2">
                         <FaMapMarkerAlt
                           className="text-danger me-2 mt-1"
@@ -289,7 +271,6 @@ const SellerOrders = () => {
                           {item.Order.city}
                         </p>
                       </div>
-
                       <div className="d-flex align-items-center mt-1">
                         <FaPhoneAlt
                           className="text-secondary me-2 ms-1"
@@ -300,7 +281,6 @@ const SellerOrders = () => {
                         </p>
                       </div>
 
-                      {/* Payment Badge matched to screenshot styling */}
                       <div className="mt-4 text-center">
                         {item.Order.paymentStatus === "Paid" ? (
                           <div

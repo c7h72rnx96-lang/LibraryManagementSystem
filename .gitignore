@@ -13,3 +13,5 @@ node_modules/
 # Build folders
 dist/
 build/all_server.txt
+client/all_client.txt
+server/all_server.txt

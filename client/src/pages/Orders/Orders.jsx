@@ -1,71 +1,43 @@
-// === src/pages/Orders/Orders.jsx ===
-import React, { useState, useEffect } from "react";
-import axios from "axios";
+import React, { useEffect } from "react";
+import axiosInstance from "../../utils/axiosInstance.js";
 import { FaBoxOpen, FaCheckCircle, FaClock, FaDownload } from "react-icons/fa";
 import toast from "react-hot-toast";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-const API_URL = import.meta.env.VITE_API_URL;
+// TanStack Query
+import { useOrdersQuery } from "../../hooks/queries/useOrders.js";
 
 const Orders = () => {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-
   const location = useLocation();
   const navigate = useNavigate();
 
-  // 🔥 STRIPE PAYMENT UI HANDLER (Security handled by Webhook now)
+  // Server State via TanStack
+  const { data: orders = [], isLoading, refetch } = useOrdersQuery();
+
+  // Stripe Payment URL Checking (UI Effect Only)
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
     const paymentStatus = queryParams.get("payment");
     const orderId = queryParams.get("orderId");
 
     if (paymentStatus === "success" && orderId) {
-      // The backend Webhook has already secured the money.
-      // We just need to show the success message to the user!
       toast.success(
         "🎉 Payment successful! Your order is now being processed.",
       );
-
-      // Clean the URL so it doesn't show twice if they refresh
       navigate("/orders", { replace: true });
-      fetchOrders();
+      refetch(); // Ensure cache is fresh after payment
     } else if (paymentStatus === "cancelled") {
       toast.error("Payment was cancelled. You can try again.");
       navigate("/orders", { replace: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search, navigate]);
+  }, [location.search, navigate, refetch]);
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
-
-  const fetchOrders = async () => {
-    try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/orders`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setOrders(response.data);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to load your orders");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 🔥 PDF INVOICE DOWNLOADER FOR CUSTOMERS
   const handleDownloadInvoice = async (orderId) => {
     const toastId = toast.loading("Generating your PDF...");
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/orders/${orderId}/invoice`, {
-        headers: { Authorization: `Bearer ${token}` },
-        responseType: "blob", // CRITICAL: Expecting a binary file
+      const response = await axiosInstance.get(`/orders/${orderId}/invoice`, {
+        responseType: "blob",
       });
-
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
@@ -73,28 +45,26 @@ const Orders = () => {
       document.body.appendChild(link);
       link.click();
       link.remove();
-
       toast.success("Receipt downloaded!", { id: toastId });
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to download receipt", { id: toastId });
+      toast.error(error.message || "Failed to download receipt", {
+        id: toastId,
+      });
     }
   };
 
-  if (loading) {
+  if (isLoading)
     return (
       <div className="text-center mt-5">
         <div className="spinner-border text-primary"></div>
       </div>
     );
-  }
 
   return (
     <div className="container-fluid mt-2">
       <h2 className="fw-bold mb-4">
         <FaBoxOpen className="me-2" /> My Orders
       </h2>
-
       {orders.length === 0 ? (
         <div className="text-center mt-5">
           <FaBoxOpen size={60} className="text-muted mb-3" />
@@ -120,7 +90,6 @@ const Orders = () => {
                     {new Date(order.createdAt).toLocaleDateString()}
                   </div>
                   <div className="text-end d-flex align-items-center gap-3">
-                    {/* Status Badge */}
                     <span
                       className={`badge ${order.orderStatus === "Processing" ? "bg-warning text-dark" : "bg-success"} fs-6 px-3 py-2`}
                     >
@@ -182,7 +151,6 @@ const Orders = () => {
                         </strong>
                       </p>
                       <hr className="my-2" />
-
                       <p className="mb-1 d-flex justify-content-between">
                         <span className="text-muted">Subtotal:</span>
                         <strong>
@@ -195,7 +163,6 @@ const Orders = () => {
                           Rs. {Number(order.deliveryFee).toFixed(2)}
                         </strong>
                       </p>
-
                       {Number(order.totalAmount) +
                         Number(order.deliveryFee) -
                         Number(order.grandTotal) >
@@ -212,7 +179,6 @@ const Orders = () => {
                           </strong>
                         </p>
                       )}
-
                       <hr className="my-2" />
                       <p className="mb-3 d-flex justify-content-between fs-5">
                         <span className="fw-bold">Total:</span>
@@ -220,8 +186,6 @@ const Orders = () => {
                           Rs. {Number(order.grandTotal).toFixed(2)}
                         </span>
                       </p>
-
-                      {/* Customer PDF Download Button */}
                       <button
                         onClick={() => handleDownloadInvoice(order.id)}
                         className="btn btn-outline-secondary w-100 fw-bold shadow-sm"

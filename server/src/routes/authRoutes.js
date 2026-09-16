@@ -10,6 +10,8 @@ import {
   resetPassword,
   changePassword,
   registerSeller,
+  logout,
+  getMe,
 } from "../controllers/authController.js";
 import {
   loginValidator,
@@ -18,6 +20,7 @@ import {
 import { validate } from "../middleware/validate.js";
 import { authenticate } from "../middleware/auth.js";
 import upload from "../config/multer.js";
+import { authLimiter } from "../middleware/rateLimiter.js";
 
 const router = Router();
 
@@ -47,8 +50,15 @@ const router = Router();
  *       401:
  *         description: Invalid credentials
  */
+// Then, wrap your sensitive POST routes by inserting `authLimiter` before validation:
+router.post("/login", authLimiter, loginValidator, validate, login);
+router.post("/register", authLimiter, registerValidator, validate, register);
+router.post("/verify", authLimiter, verify);
+router.post("/forgot-password", authLimiter, forgotPassword);
+router.post("/reset-password", authLimiter, resetPassword);
+router.post("/register-seller", authLimiter, registerSeller);
 router.post("/login", loginValidator, validate, login);
-
+router.post("/logout", logout);
 /**
  * @swagger
  * /auth/register:
@@ -162,7 +172,7 @@ router.post("/reset-password", resetPassword);
  *         description: Unauthorized
  */
 router.get("/profile", authenticate, getProfile);
-
+router.get("/me", authenticate, getMe);
 /**
  * @swagger
  * /auth/profile:

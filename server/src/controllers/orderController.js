@@ -1,10 +1,10 @@
+// === src/controllers/orderController.js ===
+import { OrderService } from "../services/OrderService.js";
 import {
-  Cart,
-  CartItem,
-  Book,
   Order,
   OrderItem,
   User,
+  Book,
   Coupon,
   Payout,
   Genre,
@@ -13,261 +13,44 @@ import { sequelize } from "../config/database.js";
 import { Op } from "sequelize";
 import PDFDocument from "pdfkit";
 
-export const createOrder = async (req, res) => {
-  const transaction = await sequelize.transaction();
-
+// ==========================================
+// 1. REFACTORED ROUTES (Using Services)
+// ==========================================
+export const createOrder = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const {
-      fullName,
-      phone,
-      address,
-      city,
-      paymentMethod,
-      cartItemIds,
-      couponCode,
-      redeemPoints = 0,
-    } = req.body;
-
-    if (!cartItemIds || cartItemIds.length === 0) {
-      await transaction.rollback();
-      return res
-        .status(400)
-        .json({ message: "No items selected for checkout" });
-    }
-
-    const cart = await Cart.findOne({
-      where: { userId },
-      include: [{ model: CartItem, include: [Book] }],
-      transaction,
-    });
-
-    if (!cart || !cart.CartItems || cart.CartItems.length === 0) {
-      await transaction.rollback();
-      return res.status(400).json({ message: "Your cart is empty" });
-    }
-
-    const selectedItems = cart.CartItems.filter((item) =>
-      cartItemIds.includes(item.id),
-    );
-
-    if (selectedItems.length === 0) {
-      await transaction.rollback();
-      return res
-        .status(400)
-        .json({ message: "Selected items not found in cart" });
-    }
-
-    let subtotal = 0;
-    let eligibleSubtotal = 0;
-
-    let appliedCoupon = null;
-    if (couponCode) {
-      appliedCoupon = await Coupon.findOne({
-        where: { code: couponCode.trim().toUpperCase(), isActive: true },
-        transaction,
-      });
-    }
-
-    for (const item of selectedItems) {
-      const book = item.Book;
-      if (book.stock < item.quantity) {
-        await transaction.rollback();
-        return res.status(400).json({
-          message: `Insufficient stock for "${book.title}". Only ${book.stock} left.`,
-        });
-      }
-
-      const effectivePrice =
-        book.discountPercentage > 0
-          ? Number(book.price) * (1 - book.discountPercentage / 100)
-          : Number(book.price);
-
-      const lineTotal = effectivePrice * item.quantity;
-      subtotal += lineTotal;
-
-      if (appliedCoupon) {
-        let isEligible = true;
-        if (appliedCoupon.sellerId && book.sellerId !== appliedCoupon.sellerId)
-          isEligible = false;
-        if (
-          appliedCoupon.applicableGenreId &&
-          book.genreId !== appliedCoupon.applicableGenreId
-        )
-          isEligible = false;
-        if (appliedCoupon.excludeDiscountedItems && book.discountPercentage > 0)
-          isEligible = false;
-
-        if (isEligible) eligibleSubtotal += lineTotal;
-      }
-    }
-
-    let couponDiscount = 0;
-
-    if (
-      appliedCoupon &&
-      eligibleSubtotal >= Number(appliedCoupon.minOrderAmount)
-    ) {
-      if (appliedCoupon.discountType === "free_shipping") {
-        couponDiscount = 0;
-      } else if (appliedCoupon.discountType === "percentage") {
-        couponDiscount =
-          (eligibleSubtotal * Number(appliedCoupon.discountValue)) / 100;
-        if (
-          appliedCoupon.maxDiscountAmount &&
-          couponDiscount > Number(appliedCoupon.maxDiscountAmount)
-        ) {
-          couponDiscount = Number(appliedCoupon.maxDiscountAmount);
-        }
-      } else {
-        couponDiscount = Math.min(
-          Number(appliedCoupon.discountValue),
-          eligibleSubtotal,
-        );
-      }
-      appliedCoupon.usedCount += 1;
-      await appliedCoupon.save({ transaction });
-    } else if (appliedCoupon) {
-      appliedCoupon = null;
-    }
-
-    const customer = await User.findByPk(userId, { transaction });
-    let loyaltyDiscount = 0;
-
-    const requestedPoints =
-      appliedCoupon && !appliedCoupon.isStackable
-        ? 0
-        : Math.max(0, parseInt(redeemPoints) || 0);
-
-    if (requestedPoints > 0) {
-      const availablePoints = customer.loyaltyPoints || 0;
-      const pointsToRedeem = Math.min(
-        requestedPoints,
-        availablePoints,
-        Math.floor(subtotal - couponDiscount),
-      );
-      loyaltyDiscount = pointsToRedeem;
-      customer.loyaltyPoints -= pointsToRedeem;
-    }
-
-    let deliveryFee = subtotal >= 1000 ? 0 : 100;
-    if (appliedCoupon && appliedCoupon.discountType === "free_shipping")
-      deliveryFee = 0;
-
-    const grandTotal =
-      Math.max(0, subtotal - couponDiscount - loyaltyDiscount) + deliveryFee;
-
-    const order = await Order.create(
-      {
-        userId,
-        totalAmount: subtotal,
-        deliveryFee,
-        grandTotal,
-        fullName,
-        phone,
-        address,
-        city,
-        paymentMethod: paymentMethod || "COD",
-        paymentStatus: paymentMethod === "COD" ? "Pending" : "Paid",
-        orderStatus: "Processing",
-      },
-      { transaction },
-    );
-
-    let totalLoyaltyPointsEarned = 0;
-
-    for (const item of selectedItems) {
-      const book = item.Book;
-      const effectivePrice =
-        book.discountPercentage > 0
-          ? Number(book.price) * (1 - book.discountPercentage / 100)
-          : Number(book.price);
-      let itemTotal = effectivePrice * item.quantity;
-      let itemDiscountShare = 0;
-
-      if (
-        appliedCoupon &&
-        appliedCoupon.discountType !== "free_shipping" &&
-        eligibleSubtotal > 0
-      ) {
-        let isEligible = true;
-        if (appliedCoupon.sellerId && book.sellerId !== appliedCoupon.sellerId)
-          isEligible = false;
-        if (
-          appliedCoupon.applicableGenreId &&
-          book.genreId !== appliedCoupon.applicableGenreId
-        )
-          isEligible = false;
-        if (appliedCoupon.excludeDiscountedItems && book.discountPercentage > 0)
-          isEligible = false;
-
-        if (isEligible) {
-          itemDiscountShare = (itemTotal / eligibleSubtotal) * couponDiscount;
-          if (appliedCoupon.sponsor === "seller") {
-            itemTotal -= itemDiscountShare;
-          }
-        }
-      }
-
-      const seller = await User.findByPk(book.sellerId, { transaction });
-      const commissionRate = seller ? seller.commissionRate : 10.0;
-      let commissionCut = itemTotal * (commissionRate / 100);
-
-      if (
-        appliedCoupon &&
-        appliedCoupon.sponsor === "platform" &&
-        itemDiscountShare > 0
-      ) {
-        commissionCut -= itemDiscountShare;
-        if (commissionCut < 0) commissionCut = 0;
-      }
-
-      const sellerEarnings = itemTotal - commissionCut;
-
-      await OrderItem.create(
-        {
-          orderId: order.id,
-          bookId: book.id,
-          sellerId: book.sellerId,
-          quantity: item.quantity,
-          priceAtPurchase: effectivePrice,
-          commissionCut,
-          sellerEarnings,
-          itemStatus: "Pending",
-        },
-        { transaction },
-      );
-
-      book.stock -= item.quantity;
-      await book.save({ transaction });
-
-      totalLoyaltyPointsEarned += Math.floor(itemTotal / 100);
-    }
-
-    customer.loyaltyPoints =
-      (customer.loyaltyPoints || 0) + totalLoyaltyPointsEarned;
-    await customer.save({ transaction });
-
-    await CartItem.destroy({
-      where: { id: { [Op.in]: cartItemIds } },
-      transaction,
-    });
-
-    await transaction.commit();
+    const result = await OrderService.checkout(req.user.id, req.body);
     res.status(201).json({
       message: "Order placed successfully!",
-      orderId: order.id,
-      pointsEarned: totalLoyaltyPointsEarned,
-      loyaltyDiscount,
-      couponDiscount,
+      orderId: result.orderId,
+      pointsEarned: result.pointsEarned,
+      loyaltyDiscount: result.loyaltyDiscount,
+      couponDiscount: result.couponDiscount,
     });
   } catch (error) {
-    await transaction.rollback();
-    console.error("Checkout Error:", error);
-    res.status(500).json({ message: "Server error during checkout" });
+    next(error); // Caught natively by errorHandler middleware
   }
 };
 
+export const updateOrderStatus = async (req, res, next) => {
+  try {
+    if (req.user.role !== "admin")
+      return res.status(403).json({ message: "Not authorized. Admin only." });
+
+    const order = await OrderService.updateOrderStatus(
+      req.params.id,
+      req.body.orderStatus,
+    );
+    res
+      .status(200)
+      .json({ message: "Order status updated successfully!", order });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ==========================================
+// 2. EXISTING ROUTES (Left intact)
+// ==========================================
 export const getUserOrders = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -296,43 +79,6 @@ export const getAllOrders = async (req, res) => {
     res.status(200).json(orders);
   } catch (error) {
     res.status(500).json({ message: "Server error fetching all orders" });
-  }
-};
-
-export const updateOrderStatus = async (req, res) => {
-  try {
-    if (req.user.role !== "admin")
-      return res.status(403).json({ message: "Not authorized. Admin only." });
-    const { id } = req.params;
-    const { orderStatus } = req.body;
-
-    const order = await Order.findByPk(id);
-    if (!order) return res.status(404).json({ message: "Order not found" });
-
-    if (orderStatus === "Delivered" && order.orderStatus !== "Delivered") {
-      const orderItems = await OrderItem.findAll({
-        where: { orderId: order.id },
-      });
-      for (const item of orderItems) {
-        const seller = await User.findByPk(item.sellerId);
-        if (seller) {
-          seller.walletBalance =
-            Number(seller.walletBalance) + Number(item.sellerEarnings);
-          await seller.save();
-        }
-        item.itemStatus = "Delivered";
-        await item.save();
-      }
-      if (order.paymentMethod === "COD") order.paymentStatus = "Paid";
-    }
-
-    order.orderStatus = orderStatus;
-    await order.save();
-    res
-      .status(200)
-      .json({ message: "Order status updated successfully!", order });
-  } catch (error) {
-    res.status(500).json({ message: "Server error updating order status" });
   }
 };
 
@@ -533,7 +279,6 @@ export const generateInvoice = async (req, res) => {
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // 🔥 NEW: Allow Admins, the Customer, OR a Seller who has an item in this order
     const isCustomer = req.user.id === order.userId;
     const isAdmin = req.user.role === "admin";
     const isSellerForOrder = order.OrderItems.some(
@@ -674,6 +419,7 @@ export const generateInvoice = async (req, res) => {
       res.status(500).json({ message: "Failed to generate invoice" });
   }
 };
+
 export const getCustomerDashboardStats = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -730,16 +476,13 @@ export const getCustomerDashboardStats = async (req, res) => {
         icon: "👑",
       };
 
-    // ... existing code inside getCustomerDashboardStats ...
     const topGenre = readingDNA.length > 0 ? readingDNA[0].genre : null;
 
-    // 🔥 NEW: Fetch the latest active welcome coupon created by the Admin
     let welcomeCoupon = await Coupon.findOne({
       where: { isFirstOrderOnly: true, isActive: true, sponsor: "platform" },
       order: [["createdAt", "DESC"]],
     });
 
-    // Fallback just in case there isn't a specific "First Order" one, grab any active platform coupon
     if (!welcomeCoupon) {
       welcomeCoupon = await Coupon.findOne({
         where: { isActive: true, sponsor: "platform" },
@@ -754,7 +497,7 @@ export const getCustomerDashboardStats = async (req, res) => {
       totalBooksRead,
       topGenre,
       bookshelf: purchasedBooks.slice(0, 12),
-      welcomeCoupon, // <-- Pass the coupon to the frontend
+      welcomeCoupon,
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to load dashboard stats" });

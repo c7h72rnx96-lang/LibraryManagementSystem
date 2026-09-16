@@ -1,7 +1,6 @@
-// === src/pages/BookDetails/BookDetails.jsx ===
 import React, { useState, useEffect, useContext } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import {
   FaStar,
   FaShoppingCart,
@@ -11,95 +10,78 @@ import {
   FaCheckCircle,
   FaBolt,
   FaEdit,
-  FaTrash, // <-- Added for Delete button
+  FaTrash,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import { AuthContext } from "../../context/AuthContext.jsx";
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
+// TanStack Query
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../constants/queryKeys.js";
+import { useBookDetails } from "../../hooks/queries/useBooks.js";
+import { useAddToCart } from "../../hooks/mutations/useCartMutations.js";
+import BookService from "../../services/BookService.js";
+
+const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
 
 const BookDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
+  const queryClient = useQueryClient();
 
-  const [book, setBook] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [recommendations, setRecommendations] = useState([]);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-    fetchBook();
-    fetchRecommendations();
-  }, [id]);
+  // Scroll to top on ID change
+  useEffect(() => window.scrollTo(0, 0), [id]);
 
-  const fetchBook = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/books/${id}`);
-      setBook(response.data);
-    } catch (error) {
-      toast.error("Failed to load book details.");
+  // Server State via TanStack
+  const { data: book, isLoading } = useBookDetails(id);
+  const { mutate: addToCart } = useAddToCart();
+
+  const { data: recommendations = [] } = useQuery({
+    queryKey: ["recommendations", id],
+    queryFn: async () => {
+      const res = await axiosInstance.get(`/books/${id}/recommendations`);
+      return res.data;
+    },
+    enabled: !!id,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => BookService.delete(id),
+    onSuccess: () => {
+      toast.success("Book deleted successfully!");
+      queryClient.invalidateQueries({ queryKey: queryKeys.books.all });
       navigate("/books");
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    onError: () => toast.error("Failed to delete book."),
+  });
 
-  const fetchRecommendations = async () => {
-    try {
-      const response = await axios.get(
-        `${API_URL}/books/${id}/recommendations`,
-      );
-      setRecommendations(response.data);
-    } catch (error) {
-      console.error("Failed to fetch recommendations", error);
-    }
-  };
-
-  const handleAddToCart = async () => {
-    if (!user) {
-      toast.error("Please login to add to cart");
-      return navigate("/login");
-    }
-    try {
-      const token = sessionStorage.getItem("token");
-      await axios.post(
-        `${API_URL}/cart/add`,
-        { bookId: book.id },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      toast.success("Added to cart!");
-    } catch (error) {
-      toast.error("Failed to add to cart.");
-    }
-  };
+  const reviewMutation = useMutation({
+    mutationFn: async (reviewData) => {
+      await axiosInstance.post(`/books/${id}/reviews`, reviewData);
+    },
+    onSuccess: () => {
+      toast.success("Review submitted successfully!");
+      setComment("");
+      setRating(5);
+      queryClient.invalidateQueries({ queryKey: queryKeys.books.detail(id) });
+    },
+    onError: (error) =>
+      toast.error(error.response?.data?.message || "Failed to submit review"),
+  });
 
   const handleBuyNow = async () => {
     if (!user) {
       toast.error("Please login to purchase");
       return navigate("/login");
     }
-
     const toastId = toast.loading("Preparing secure checkout...");
     try {
-      const token = sessionStorage.getItem("token");
-
-      // 1. Silently add to cart
-      await axios.post(
-        `${API_URL}/cart/add`,
-        { bookId: book.id },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-
-      // 2. Fetch the cart to get the specific cart item ID
-      const cartRes = await axios.get(`${API_URL}/cart`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
+      await axiosInstance.post("/cart/add", { bookId: book.id });
+      const cartRes = await axiosInstance.get("/cart");
       const cartItems = cartRes.data.CartItems || [];
       const specificCartItem = cartItems.find(
         (item) => item.bookId === book.id,
@@ -107,15 +89,11 @@ const BookDetails = () => {
 
       if (specificCartItem) {
         toast.dismiss(toastId);
-
         const effectivePrice =
           book.discountPercentage > 0
             ? book.price * (1 - book.discountPercentage / 100)
             : book.price;
-
         const subtotal = effectivePrice * specificCartItem.quantity;
-
-        // 3. Teleport straight to checkout with ONLY this item
         navigate("/checkout", {
           state: {
             selectedCartItemIds: [specificCartItem.id],
@@ -132,48 +110,14 @@ const BookDetails = () => {
     }
   };
 
-  // 🔥 NEW: Delete Logic for Admins & Owners
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (
-      !window.confirm("Are you sure you want to permanently delete this book?")
+      window.confirm("Are you sure you want to permanently delete this book?")
     )
-      return;
-    try {
-      const token = sessionStorage.getItem("token");
-      await axios.delete(`${API_URL}/books/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      toast.success("Book deleted successfully!");
-      navigate("/books");
-    } catch (error) {
-      toast.error("Failed to delete book.");
-    }
+      deleteMutation.mutate();
   };
 
-  const handleReviewSubmit = async (e) => {
-    e.preventDefault();
-    if (!user) return toast.error("Please login to leave a review.");
-    setSubmitting(true);
-
-    try {
-      const token = sessionStorage.getItem("token");
-      await axios.post(
-        `${API_URL}/books/${id}/reviews`,
-        { rating, comment },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      toast.success("Review submitted successfully!");
-      setComment("");
-      setRating(5);
-      fetchBook();
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to submit review");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (loading)
+  if (isLoading)
     return (
       <div className="text-center mt-5">
         <div className="spinner-border text-primary"></div>
@@ -185,7 +129,6 @@ const BookDetails = () => {
     book.discountPercentage > 0
       ? book.price * (1 - book.discountPercentage / 100)
       : book.price;
-
   const avgRating =
     book.Reviews?.length > 0
       ? (
@@ -193,8 +136,6 @@ const BookDetails = () => {
           book.Reviews.length
         ).toFixed(1)
       : 0;
-
-  // Determine if the user is the Owner OR an Admin
   const isManageable = user?.role === "admin" || user?.id === book.sellerId;
 
   return (
@@ -225,7 +166,6 @@ const BookDetails = () => {
               <div className="col-md-7 p-4 d-flex flex-column">
                 <h2 className="fw-bold mb-1">{book.title}</h2>
                 <h5 className="text-muted mb-3">By {book.Author?.name}</h5>
-
                 <div className="d-flex align-items-center gap-3 mb-3">
                   <span className="badge bg-secondary fs-6">
                     {book.Genre?.name}
@@ -238,7 +178,6 @@ const BookDetails = () => {
                     </span>
                   </div>
                 </div>
-
                 <p
                   className="text-muted flex-grow-1"
                   style={{ lineHeight: "1.8" }}
@@ -276,10 +215,8 @@ const BookDetails = () => {
                       </small>
                     </div>
 
-                    {/* 🔥 DYNAMIC RENDER: ADMIN/SELLER MANAGEMENT VS. BUYER CHECKOUT */}
                     <div className="d-flex gap-2 w-100 w-md-auto mt-2 mt-md-0">
                       {isManageable ? (
-                        // ADMIN OR SELLER VIEW
                         <>
                           <Link
                             to={`/books/edit/${book.id}`}
@@ -290,15 +227,22 @@ const BookDetails = () => {
                           <button
                             onClick={handleDelete}
                             className="btn btn-danger btn-lg flex-fill px-4 fw-bold shadow-sm"
+                            disabled={deleteMutation.isPending}
                           >
                             <FaTrash className="me-2" /> Delete Book
                           </button>
                         </>
                       ) : (
-                        // BUYER VIEW
                         <>
                           <button
-                            onClick={handleAddToCart}
+                            onClick={() => {
+                              if (!user) {
+                                toast.error("Please login");
+                                navigate("/login");
+                              } else {
+                                addToCart(book.id);
+                              }
+                            }}
                             className="btn btn-outline-primary btn-lg flex-fill px-3 fw-bold"
                             disabled={book.stock < 1}
                           >
@@ -321,7 +265,6 @@ const BookDetails = () => {
           </div>
         </div>
 
-        {/* DARAZ-STYLE SELLER INFO COLUMN */}
         <div className="col-lg-4">
           <div
             className="card shadow-sm border-secondary h-100 bg-dark text-white rounded-4"
@@ -339,7 +282,6 @@ const BookDetails = () => {
                   GO TO STORE
                 </Link>
               </div>
-
               <div className="d-flex align-items-center mb-4 pb-4 border-bottom border-secondary border-opacity-50">
                 <div
                   className="rounded-circle bg-info bg-opacity-25 d-flex justify-content-center align-items-center me-3"
@@ -361,7 +303,6 @@ const BookDetails = () => {
                   </div>
                 </div>
               </div>
-
               <div className="row text-center mt-auto">
                 <div className="col-4 border-end border-secondary border-opacity-50">
                   <div
@@ -396,7 +337,6 @@ const BookDetails = () => {
         </div>
       </div>
 
-      {/* DISCOVERY ENGINE */}
       {recommendations.length > 0 && (
         <div className="mb-5">
           <h4 className="fw-bold mb-4">
@@ -456,7 +396,6 @@ const BookDetails = () => {
         </div>
       )}
 
-      {/* REVIEWS SECTION */}
       <h3 className="fw-bold mb-4">Customer Reviews</h3>
       <div className="row g-4">
         <div className="col-lg-4">
@@ -466,7 +405,12 @@ const BookDetails = () => {
           >
             <h5 className="fw-bold mb-3">Write a Review</h5>
             {user ? (
-              <form onSubmit={handleReviewSubmit}>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  reviewMutation.mutate({ rating, comment });
+                }}
+              >
                 <div className="mb-3">
                   <label className="form-label fw-bold">Rating</label>
                   <select
@@ -495,9 +439,9 @@ const BookDetails = () => {
                 <button
                   type="submit"
                   className="btn btn-dark w-100 fw-bold"
-                  disabled={submitting}
+                  disabled={reviewMutation.isPending}
                 >
-                  {submitting ? "Submitting..." : "Submit Review"}
+                  {reviewMutation.isPending ? "Submitting..." : "Submit Review"}
                 </button>
               </form>
             ) : (

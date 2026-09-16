@@ -1,4 +1,3 @@
-// === src/pages/Books/Books.jsx ===
 import React, { useState, useEffect, useContext } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -10,37 +9,92 @@ import {
   FaShoppingCart,
   FaHeart,
   FaCheckSquare,
+  FaChevronLeft,
+  FaChevronRight,
 } from "react-icons/fa";
 import { AuthContext } from "../../context/AuthContext.jsx";
-import axios from "axios";
-import BookService from "../../services/BookService.js";
 import GenreService from "../../services/GenreService.js";
-import WishlistService from "../../services/WishlistService.js";
+import BookService from "../../services/BookService.js";
 import toast from "react-hot-toast";
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
+// TanStack Query Hooks
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { queryKeys } from "../../constants/queryKeys.js";
+import { useBooksList } from "../../hooks/queries/useBooks.js";
+import { useAddToCart } from "../../hooks/mutations/useCartMutations.js";
+import {
+  useWishlistQuery,
+  useToggleWishlist,
+} from "../../hooks/mutations/useWishlistMutations.js";
+
+const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
 
 const Books = () => {
   const { user } = useContext(AuthContext);
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const queryParams = new URLSearchParams(location.search);
   const urlAuthor = queryParams.get("author") || "";
   const urlGenre = queryParams.get("genre") || "";
 
-  const [books, setBooks] = useState([]);
   const [genres, setGenres] = useState([]);
-  const [wishlistIds, setWishlistIds] = useState([]);
-  const [loading, setLoading] = useState(true);
-
+  const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState(urlAuthor);
   const [selectedGenre, setSelectedGenre] = useState("");
-
   const [selectedBooks, setSelectedBooks] = useState([]);
-  const [addingId, setAddingId] = useState(null);
 
+  // ==========================================
+  // 1. SERVER STATE (Managed by TanStack Query)
+  // ==========================================
+  const { data: booksData, isLoading: isBooksLoading } = useBooksList(
+    searchTerm,
+    selectedGenre,
+    page,
+  );
+  const { data: wishlistData } = useWishlistQuery(user);
+
+  const {
+    mutate: addToCart,
+    isPending: isAddingToCart,
+    variables: addingBookId,
+  } = useAddToCart();
+  const { mutate: toggleWishlist } = useToggleWishlist();
+
+  // Derived Data
+  const books = booksData?.books || [];
+  const totalPages = booksData?.totalPages || 1;
+  const totalItems = booksData?.totalItems || 0;
+  const wishlistIds = wishlistData?.map((w) => w.bookId) || [];
+
+  // ==========================================
+  // 2. MUTATIONS (Deletes)
+  // ==========================================
+  const deleteMutation = useMutation({
+    mutationFn: (id) => BookService.delete(id),
+    onSuccess: () => {
+      toast.success("Book deleted successfully!");
+      setSelectedBooks([]);
+      queryClient.invalidateQueries({ queryKey: queryKeys.books.all });
+    },
+    onError: (err) => toast.error(err.message || "Failed to delete book"),
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids) => BookService.deleteBulk(ids),
+    onSuccess: (_, variables) => {
+      toast.success(`${variables.length} books deleted!`);
+      setSelectedBooks([]);
+      setPage(1);
+      queryClient.invalidateQueries({ queryKey: queryKeys.books.all });
+    },
+    onError: (err) => toast.error(err.message || "Failed to delete books."),
+  });
+
+  // ==========================================
+  // 3. EFFECTS (Local UI State only)
+  // ==========================================
   useEffect(() => {
     const loadGenres = async () => {
       try {
@@ -53,17 +107,7 @@ const Books = () => {
     loadGenres();
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      WishlistService.getWishlist()
-        .then((data) => setWishlistIds(data.map((w) => w.bookId)))
-        .catch((err) => console.error("Failed to fetch wishlist", err));
-    }
-  }, [user]);
-
-  useEffect(() => {
-    setSearchTerm(urlAuthor);
-  }, [urlAuthor]);
+  useEffect(() => setSearchTerm(urlAuthor), [urlAuthor]);
 
   useEffect(() => {
     if (urlGenre && genres.length > 0) {
@@ -76,28 +120,14 @@ const Books = () => {
     }
   }, [urlGenre, genres]);
 
-  useEffect(() => {
-    const fetchBooks = async () => {
-      setLoading(true);
-      try {
-        const booksData = await BookService.getAll(searchTerm, selectedGenre);
-        setBooks(booksData);
-      } catch (error) {
-        console.error(error);
-        toast.error("Failed to fetch books");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchBooks();
-  }, [searchTerm, selectedGenre]);
+  useEffect(() => setPage(1), [searchTerm, selectedGenre]);
 
-  // Check if current user has permission to manage a specific book
+  // ==========================================
+  // 4. HANDLERS
+  // ==========================================
   const canManage = (book) =>
     user?.role === "admin" ||
     (user?.role === "seller" && book.sellerId === user.id);
-
-  // Get all books currently on screen that the user is allowed to select
   const manageableBooks = books.filter(canManage);
 
   const handleSelectAll = () => {
@@ -105,9 +135,9 @@ const Books = () => {
       selectedBooks.length === manageableBooks.length &&
       manageableBooks.length > 0
     ) {
-      setSelectedBooks([]); // Deselect all
+      setSelectedBooks([]);
     } else {
-      setSelectedBooks(manageableBooks.map((b) => b.id)); // Select all manageable
+      setSelectedBooks(manageableBooks.map((b) => b.id));
     }
   };
 
@@ -119,88 +149,42 @@ const Books = () => {
     );
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this book?")) return;
-    try {
-      await BookService.delete(id);
-      toast.success("Book deleted successfully!");
-      const updatedBooks = await BookService.getAll(searchTerm, selectedGenre);
-      setBooks(updatedBooks);
-      setSelectedBooks((prev) => prev.filter((bId) => bId !== id)); // Remove from selection if it was checked
-    } catch (error) {
-      toast.error(error.message);
-    }
+  const handleDelete = (id) => {
+    if (window.confirm("Delete this book?")) deleteMutation.mutate(id);
   };
 
-  // Execute Bulk Delete
-  const handleBulkDelete = async () => {
-    if (
-      !window.confirm(
-        `Are you sure you want to permanently delete ${selectedBooks.length} books?`,
-      )
-    )
-      return;
-    const toastId = toast.loading(`Deleting ${selectedBooks.length} books...`);
-    try {
-      await BookService.deleteBulk(selectedBooks);
-      toast.success(`${selectedBooks.length} books deleted!`, { id: toastId });
-      setSelectedBooks([]);
-
-      // Refresh library
-      const updatedBooks = await BookService.getAll(searchTerm, selectedGenre);
-      setBooks(updatedBooks);
-    } catch (error) {
-      toast.error("Failed to delete books.", { id: toastId });
-    }
-  };
-
-  const handleAddToCart = async (bookId) => {
-    setAddingId(bookId);
-    try {
-      const token = sessionStorage.getItem("token");
-      await axios.post(
-        `${API_URL}/cart/add`,
-        { bookId },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      toast.success("Added to cart!");
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to add to cart. Please log in.");
-    } finally {
-      setAddingId(null);
-    }
-  };
-
-  const handleWishlistToggle = async (bookId) => {
-    if (!user) return toast.error("Please login to save books!");
-    try {
-      const res = await WishlistService.toggleWishlist(bookId);
-      if (res.added) {
-        setWishlistIds([...wishlistIds, bookId]);
-        toast.success("Saved to Wishlist! ❤️");
-      } else {
-        setWishlistIds(wishlistIds.filter((id) => id !== bookId));
-        toast.success("Removed from Wishlist 💔");
-      }
-    } catch (error) {
-      toast.error("Failed to update wishlist");
+  const handleBulkDelete = () => {
+    if (window.confirm(`Permanently delete ${selectedBooks.length} books?`)) {
+      bulkDeleteMutation.mutate(selectedBooks);
     }
   };
 
   return (
     <div className="container-fluid position-relative pb-5">
+      {/* 🔥 Custom Skeleton Animation CSS */}
+      <style>{`
+        @keyframes pulse {
+          0% { background-color: rgba(255,255,255,0.05); }
+          50% { background-color: rgba(255,255,255,0.15); }
+          100% { background-color: rgba(255,255,255,0.05); }
+        }
+        .skeleton-box {
+          animation: pulse 1.5s infinite ease-in-out;
+          border-radius: 8px;
+        }
+      `}</style>
+
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="fw-bold">Books</h2>
-          <p className="text-muted mb-0">Manage your library collection</p>
+          <h2 className="fw-bold">Library Catalog</h2>
+          <p className="text-muted mb-0">Showing {totalItems} total books</p>
         </div>
 
         <div className="d-flex gap-2">
-          {/* Show Bulk Delete button when items are selected */}
           {selectedBooks.length > 0 && (
             <button
               onClick={handleBulkDelete}
+              disabled={bulkDeleteMutation.isPending}
               className="btn btn-danger fw-bold px-4 shadow-sm animate__animated animate__fadeIn"
             >
               <FaTrash className="me-2" /> Delete Selected (
@@ -222,7 +206,6 @@ const Books = () => {
       <div className="card mb-4 shadow-sm border-0">
         <div className="card-body">
           <div className="row g-3 align-items-center">
-            {/* Select All Checkbox for Admins/Sellers */}
             {(user?.role === "admin" || user?.role === "seller") &&
               manageableBooks.length > 0 && (
                 <div className="col-auto ps-3 pe-0">
@@ -270,208 +253,266 @@ const Books = () => {
         </div>
       </div>
 
-      {loading ? (
-        <div className="text-center mt-5">
-          <div className="spinner-border text-primary"></div>
+      {/* 🔥 PROFESSIONAL SKELETON LOADER */}
+      {isBooksLoading ? (
+        <div className="row g-4">
+          {[...Array(6)].map((_, index) => (
+            <div key={index} className="col-md-6 col-lg-4">
+              <div
+                className="card h-100 shadow-sm border-0 position-relative p-3"
+                style={{ background: "rgba(15, 23, 42, 0.4)" }}
+              >
+                <div
+                  className="skeleton-box mb-3"
+                  style={{ height: "260px", width: "100%" }}
+                ></div>
+                <div
+                  className="skeleton-box mb-2"
+                  style={{ height: "24px", width: "80%" }}
+                ></div>
+                <div
+                  className="skeleton-box mb-4"
+                  style={{ height: "16px", width: "50%" }}
+                ></div>
+                <div
+                  className="skeleton-box mb-2"
+                  style={{ height: "30px", width: "40%" }}
+                ></div>
+                <div
+                  className="skeleton-box mt-auto"
+                  style={{ height: "40px", width: "100%" }}
+                ></div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
-        <div className="row g-4">
-          {books.map((book) => {
-            const isManageable = canManage(book);
-            const isSelected = selectedBooks.includes(book.id);
+        <>
+          <div className="row g-4">
+            {books.map((book) => {
+              const isManageable = canManage(book);
+              const isSelected = selectedBooks.includes(book.id);
 
-            return (
-              <div key={book.id} className="col-md-6 col-lg-4">
-                <div
-                  className={`card h-100 shadow-sm border-0 position-relative transition-all ${isSelected ? "ring-2 ring-primary bg-primary bg-opacity-10" : ""}`}
-                  style={{ border: isSelected ? "2px solid #3b82f6" : "none" }}
-                >
-                  {/* TOP CORNER ACTION BADGES */}
+              return (
+                <div key={book.id} className="col-md-6 col-lg-4">
                   <div
-                    className="position-absolute top-0 w-100 d-flex justify-content-between p-2"
-                    style={{ zIndex: 10 }}
+                    className={`card h-100 shadow-sm border-0 position-relative transition-all ${isSelected ? "ring-2 ring-primary bg-primary bg-opacity-10" : ""}`}
+                    style={{
+                      border: isSelected ? "2px solid #3b82f6" : "none",
+                    }}
                   >
-                    {/* LEFT CORNER: SELECT CHECKBOX & YOUR LISTING BADGE */}
-                    <div className="d-flex align-items-center">
-                      {isManageable && (
-                        <>
-                          <input
-                            type="checkbox"
-                            className="form-check-input ms-1 shadow-sm"
-                            style={{
-                              transform: "scale(1.5)",
-                              cursor: "pointer",
-                            }}
-                            checked={isSelected}
-                            onChange={() => toggleSelection(book.id)}
-                          />
-                          {user?.role === "seller" && (
-                            <span className="badge bg-info text-dark fw-bold ms-2 shadow-sm">
-                              Your Listing
-                            </span>
-                          )}
-                        </>
+                    <div
+                      className="position-absolute top-0 w-100 d-flex justify-content-between p-2"
+                      style={{ zIndex: 10 }}
+                    >
+                      <div className="d-flex align-items-center">
+                        {isManageable && (
+                          <>
+                            <input
+                              type="checkbox"
+                              className="form-check-input ms-1 shadow-sm"
+                              style={{
+                                transform: "scale(1.5)",
+                                cursor: "pointer",
+                              }}
+                              checked={isSelected}
+                              onChange={() => toggleSelection(book.id)}
+                            />
+                            {user?.role === "seller" && (
+                              <span className="badge bg-info text-dark fw-bold ms-2 shadow-sm">
+                                Your Listing
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!user)
+                            return toast.error("Please login to save books!");
+                          toggleWishlist(book.id);
+                        }}
+                        className="btn btn-light rounded-circle shadow-sm d-flex justify-content-center align-items-center border-0 p-0"
+                        style={{
+                          width: "40px",
+                          height: "40px",
+                          backgroundColor: "rgba(255,255,255,0.9)",
+                        }}
+                      >
+                        <FaHeart
+                          className={
+                            wishlistIds.includes(book.id)
+                              ? "text-danger fs-5"
+                              : "text-secondary fs-5"
+                          }
+                        />
+                      </button>
+                    </div>
+
+                    <div
+                      className="w-100 d-flex justify-content-center align-items-center p-3"
+                      style={{
+                        height: "280px",
+                        background: "rgba(0,0,0,0.2)",
+                        cursor: "pointer",
+                        borderTopLeftRadius: "var(--bs-border-radius)",
+                        borderTopRightRadius: "var(--bs-border-radius)",
+                      }}
+                      onClick={() => navigate(`/books/${book.id}`)}
+                    >
+                      {book.image ? (
+                        <img
+                          src={
+                            book.image.startsWith("http")
+                              ? book.image
+                              : `${SERVER_URL}/uploads/${book.image}`
+                          }
+                          alt={book.title}
+                          className="shadow-lg rounded"
+                          style={{
+                            maxHeight: "100%",
+                            maxWidth: "100%",
+                            objectFit: "contain",
+                          }}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = `https://placehold.co/400x600/1e293b/ffffff?text=No+Cover`;
+                          }}
+                        />
+                      ) : (
+                        <FaBookOpen size={50} color="#64748b" />
                       )}
                     </div>
-                    {/* RIGHT CORNER: WISHLIST ICON */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleWishlistToggle(book.id);
-                      }}
-                      className="btn btn-light rounded-circle shadow-sm d-flex justify-content-center align-items-center border-0 p-0"
-                      style={{
-                        width: "40px",
-                        height: "40px",
-                        backgroundColor: "rgba(255,255,255,0.9)",
-                      }}
-                    >
-                      <FaHeart
-                        className={
-                          wishlistIds.includes(book.id)
-                            ? "text-danger fs-5"
-                            : "text-secondary fs-5"
-                        }
-                      />
-                    </button>
-                  </div>
 
-                  {/* COVER IMAGE */}
-                  <div
-                    className="w-100 d-flex justify-content-center align-items-center p-3"
-                    style={{
-                      height: "280px",
-                      background: "rgba(0,0,0,0.2)",
-                      cursor: "pointer",
-                      borderTopLeftRadius: "var(--bs-border-radius)",
-                      borderTopRightRadius: "var(--bs-border-radius)",
-                    }}
-                    onClick={() => navigate(`/books/${book.id}`)}
-                  >
-                    {book.image ? (
-                      <img
-                        src={
-                          book.image.startsWith("http")
-                            ? book.image
-                            : `${SERVER_URL}/uploads/${book.image}`
-                        }
-                        alt={book.title}
-                        className="shadow-lg rounded"
-                        style={{
-                          maxHeight: "100%",
-                          maxWidth: "100%",
-                          objectFit: "contain",
-                        }}
-                        onError={(e) => {
-                          e.currentTarget.onerror = null;
-                          e.currentTarget.src = `https://placehold.co/400x600/1e293b/ffffff?text=No+Cover`;
-                        }}
-                      />
-                    ) : (
-                      <FaBookOpen size={50} color="#64748b" />
-                    )}
-                  </div>
+                    <div className="card-body d-flex flex-column">
+                      <h5
+                        className="fw-bold text-primary text-truncate"
+                        style={{ cursor: "pointer" }}
+                        onClick={() => navigate(`/books/${book.id}`)}
+                        title={book.title}
+                      >
+                        {book.title}
+                      </h5>
+                      <p className="mb-1 text-muted small">
+                        <strong>Author:</strong> {book.Author?.name}
+                      </p>
 
-                  {/* DETAILS */}
-                  <div className="card-body d-flex flex-column">
-                    <h5
-                      className="fw-bold text-primary text-truncate"
-                      style={{ cursor: "pointer" }}
-                      onClick={() => navigate(`/books/${book.id}`)}
-                      title={book.title}
-                    >
-                      {book.title}
-                    </h5>
-                    <p className="mb-1 text-muted small">
-                      <strong>Author:</strong> {book.Author?.name}
-                    </p>
-
-                    <div className="mb-3">
-                      {book.discountPercentage > 0 ? (
-                        <div className="d-flex align-items-center gap-2">
-                          <span className="fw-bold text-success fs-5">
-                            Rs.{" "}
-                            {(
-                              book.price *
-                              (1 - book.discountPercentage / 100)
-                            ).toFixed(2)}
-                          </span>
-                          <span className="text-decoration-line-through text-muted small">
+                      <div className="mb-3">
+                        {book.discountPercentage > 0 ? (
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="fw-bold text-success fs-5">
+                              Rs.{" "}
+                              {(
+                                book.price *
+                                (1 - book.discountPercentage / 100)
+                              ).toFixed(2)}
+                            </span>
+                            <span className="text-decoration-line-through text-muted small">
+                              Rs. {Number(book.price).toFixed(2)}
+                            </span>
+                            <span className="badge bg-danger">
+                              -{book.discountPercentage}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="fw-bold fs-5">
                             Rs. {Number(book.price).toFixed(2)}
                           </span>
-                          <span className="badge bg-danger">
-                            -{book.discountPercentage}%
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="fw-bold fs-5">
-                          Rs. {Number(book.price).toFixed(2)}
+                        )}
+                      </div>
+
+                      <p className="mb-3">
+                        <strong>Stock:</strong>
+                        <span
+                          className={`badge ms-2 ${book.stock < 1 ? "bg-danger" : "bg-success"}`}
+                        >
+                          {book.stock}
                         </span>
-                      )}
-                    </div>
+                      </p>
 
-                    <p className="mb-3">
-                      <strong>Stock:</strong>
-                      <span
-                        className={`badge ms-2 ${book.stock < 1 ? "bg-danger" : "bg-success"}`}
-                      >
-                        {book.stock}
-                      </span>
-                    </p>
-
-                    {/* ACTION BUTTONS: CONDITIONAL SELLER VS BUYER VIEW */}
-                    <div className="mt-auto d-flex flex-column gap-2">
-                      {isManageable ? (
-                        // 🏪 YOUR BOOK: Management Controls Only
-                        <div className="d-flex gap-2">
-                          <Link
-                            to={`/books/edit/${book.id}`}
-                            className="btn btn-primary flex-fill fw-bold py-2 shadow-sm d-flex justify-content-center align-items-center"
-                          >
-                            <FaEdit className="me-1" /> Edit
-                          </Link>
-                          <button
-                            onClick={() => handleDelete(book.id)}
-                            className="btn btn-danger flex-fill fw-bold py-2 shadow-sm d-flex justify-content-center align-items-center"
-                          >
-                            <FaTrash className="me-1" /> Delete
-                          </button>
-                        </div>
-                      ) : (
-                        // 🛒 OTHER STORE'S BOOK: Add to Cart Option
-                        user && (
-                          <button
-                            onClick={() => handleAddToCart(book.id)}
-                            className="btn btn-success w-100 fw-bold d-flex justify-content-center align-items-center py-2 shadow-sm"
-                            disabled={book.stock < 1 || addingId === book.id}
-                          >
-                            {addingId === book.id ? (
-                              <div className="spinner-border spinner-border-sm me-2"></div>
-                            ) : (
-                              <FaShoppingCart className="me-2" />
-                            )}
-                            {book.stock < 1
-                              ? "Out of Stock"
-                              : addingId === book.id
-                                ? "Adding..."
-                                : "Add to Cart"}
-                          </button>
-                        )
-                      )}
+                      <div className="mt-auto d-flex flex-column gap-2">
+                        {isManageable ? (
+                          <div className="d-flex gap-2">
+                            <Link
+                              to={`/books/edit/${book.id}`}
+                              className="btn btn-primary flex-fill fw-bold py-2 shadow-sm d-flex justify-content-center align-items-center"
+                            >
+                              <FaEdit className="me-1" /> Edit
+                            </Link>
+                            <button
+                              onClick={() => handleDelete(book.id)}
+                              disabled={deleteMutation.isPending}
+                              className="btn btn-danger flex-fill fw-bold py-2 shadow-sm d-flex justify-content-center align-items-center"
+                            >
+                              <FaTrash className="me-1" /> Delete
+                            </button>
+                          </div>
+                        ) : (
+                          user && (
+                            <button
+                              onClick={() => addToCart(book.id)}
+                              className="btn btn-success w-100 fw-bold d-flex justify-content-center align-items-center py-2 shadow-sm"
+                              disabled={
+                                book.stock < 1 ||
+                                (isAddingToCart && addingBookId === book.id)
+                              }
+                            >
+                              {isAddingToCart && addingBookId === book.id ? (
+                                <div className="spinner-border spinner-border-sm me-2"></div>
+                              ) : (
+                                <FaShoppingCart className="me-2" />
+                              )}
+                              {book.stock < 1
+                                ? "Out of Stock"
+                                : isAddingToCart && addingBookId === book.id
+                                  ? "Adding..."
+                                  : "Add to Cart"}
+                            </button>
+                          )
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
+              );
+            })}
+            {books.length === 0 && (
+              <div className="col-12 text-center py-5">
+                <FaBookOpen size={60} className="text-secondary mb-3" />
+                <h4>No Books Found</h4>
+                <p className="text-muted">
+                  Try adjusting your search or filters.
+                </p>
               </div>
-            );
-          })}
-          {books.length === 0 && (
-            <div className="col-12 text-center py-5">
-              <FaBookOpen size={60} className="text-secondary mb-3" />
-              <h4>No Books Found</h4>
-              <p className="text-muted">Try another search.</p>
+            )}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="d-flex justify-content-center align-items-center mt-5 mb-2 gap-3">
+              <button
+                className="btn btn-dark border-secondary px-4 fw-bold shadow-sm"
+                disabled={page === 1}
+                onClick={() => setPage(page - 1)}
+              >
+                <FaChevronLeft className="me-2" /> Prev
+              </button>
+              <span
+                className="text-white fw-bold px-3 py-2 rounded-3"
+                style={{ background: "rgba(255,255,255,0.1)" }}
+              >
+                Page {page} of {totalPages}
+              </span>
+              <button
+                className="btn btn-dark border-secondary px-4 fw-bold shadow-sm"
+                disabled={page === totalPages}
+                onClick={() => setPage(page + 1)}
+              >
+                Next <FaChevronRight className="ms-2" />
+              </button>
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );

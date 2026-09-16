@@ -5,6 +5,9 @@ import app from "./app.js";
 import { config } from "./config/index.js";
 import { sequelize } from "./config/database.js"; // <-- This was the missing line!
 import { startRetentionJobs } from "./jobs/retention.js";
+import { validateEnv } from "./config/env.js";
+
+validateEnv();
 
 const startServer = async () => {
   try {

@@ -1,8 +1,9 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
-import { setupSwagger } from "./config/swagger.js"; // 🔥 1. Import Swagger setup
+import cookieParser from "cookie-parser"; // <-- NEW
+import { setupSwagger } from "./config/swagger.js";
+import { apiLimiter } from "./middleware/rateLimiter.js"; // <-- NEW
 
 import authRoutes from "./routes/authRoutes.js";
 import bookRoutes from "./routes/bookRoutes.js";
@@ -19,34 +20,37 @@ import supportRoutes from "./routes/supportRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 
 import { stripeWebhook } from "./controllers/paymentController.js";
-
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(cookieParser()); // <-- NEW: Required for HttpOnly cookies
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests from this IP, please try again later." },
-});
-app.use("/api/", limiter);
+// Global generic API limiter (Light protection)
+app.use("/api/", apiLimiter);
+
+// Explicit CORS setup for cross-domain cookies
+const allowedOrigins = [
+  "http://localhost:5173",
+  "[https://friendly-creponne-7f3883.netlify.app](https://friendly-creponne-7f3883.netlify.app)",
+  "[https://librarymanagementsystem-2-qqad.onrender.com](https://librarymanagementsystem-2-qqad.onrender.com)",
+  "[https://aashish7.me](https://aashish7.me)",
+  "[https://www.aashish7.me](https://www.aashish7.me)",
+];
 
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://friendly-creponne-7f3883.netlify.app",
-      "https://librarymanagementsystem-2-qqad.onrender.com",
-      "https://aashish7.me",
-      "https://www.aashish7.me",
-    ],
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "stripe-signature"],
-    credentials: true,
+    credentials: true, // <-- CRITICAL: Allows cookies to be sent
   }),
 );
 
@@ -57,7 +61,6 @@ app.post(
   stripeWebhook,
 );
 
-// Normal JSON parsing for everything else
 app.use(express.json());
 app.use("/uploads", express.static("src/uploads"));
 
@@ -79,7 +82,6 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/chat", chatRoutes);
 
-// 🔥 2. Initialize Swagger documentation UI right before error handlers
 setupSwagger(app);
 
 app.use(notFoundHandler);

@@ -1,106 +1,22 @@
 import { Coupon, Order, Cart, CartItem, Book } from "../models/index.js";
 import { Op } from "sequelize";
 
-export const validateCoupon = async (req, res) => {
+// Inside src/controllers/couponController.js
+// Replace ONLY validateCoupon:
+import { CouponService } from "../services/couponService.js";
+
+export const validateCoupon = async (req, res, next) => {
   try {
     const { code } = req.body;
     const userId = req.user.id;
 
-    if (!code)
-      return res.status(400).json({ message: "Coupon code is required" });
+    // Notice we do NOT pass `cartSubtotal` from req.body anymore!
+    const result = await CouponService.validate(code, userId);
 
-    const coupon = await Coupon.findOne({
-      where: { code: code.trim().toUpperCase(), isActive: true },
-    });
-
-    if (!coupon)
-      return res.status(404).json({ message: "Invalid coupon code." });
-    if (coupon.expiresAt && new Date() > new Date(coupon.expiresAt))
-      return res.status(400).json({ message: "Coupon has expired." });
-    if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit)
-      return res.status(400).json({ message: "Coupon usage limit reached." });
-
-    if (coupon.isFirstOrderOnly) {
-      const pastOrders = await Order.count({ where: { userId } });
-      if (pastOrders > 0)
-        return res
-          .status(400)
-          .json({ message: "This code is for first-time buyers only." });
-    }
-
-    const cart = await Cart.findOne({
-      where: { userId },
-      include: [{ model: CartItem, include: [Book] }],
-    });
-
-    if (!cart || cart.CartItems.length === 0)
-      return res.status(400).json({ message: "Cart is empty." });
-
-    let eligibleSubtotal = 0;
-
-    cart.CartItems.forEach((item) => {
-      const book = item.Book;
-      let isEligible = true;
-
-      if (coupon.sellerId && book.sellerId !== coupon.sellerId)
-        isEligible = false;
-      if (coupon.applicableGenreId && book.genreId !== coupon.applicableGenreId)
-        isEligible = false;
-      if (coupon.excludeDiscountedItems && book.discountPercentage > 0)
-        isEligible = false;
-
-      if (isEligible) {
-        const price =
-          book.discountPercentage > 0
-            ? Number(book.price) * (1 - book.discountPercentage / 100)
-            : Number(book.price);
-        eligibleSubtotal += price * item.quantity;
-      }
-    });
-
-    if (eligibleSubtotal === 0)
-      return res
-        .status(400)
-        .json({
-          message: "No items in your cart are eligible for this promo.",
-        });
-
-    if (eligibleSubtotal < Number(coupon.minOrderAmount)) {
-      const shortfall = Number(coupon.minOrderAmount) - eligibleSubtotal;
-      return res
-        .status(400)
-        .json({
-          message: `Add Rs. ${shortfall.toFixed(2)} more in eligible items to unlock this discount!`,
-        });
-    }
-
-    let discountAmount = 0;
-    if (coupon.discountType === "free_shipping") {
-      discountAmount = 100;
-    } else if (coupon.discountType === "percentage") {
-      discountAmount = (eligibleSubtotal * Number(coupon.discountValue)) / 100;
-      if (
-        coupon.maxDiscountAmount &&
-        discountAmount > Number(coupon.maxDiscountAmount)
-      ) {
-        discountAmount = Number(coupon.maxDiscountAmount);
-      }
-    } else {
-      discountAmount = Math.min(Number(coupon.discountValue), eligibleSubtotal);
-    }
-
-    return res.status(200).json({
-      valid: true,
-      code: coupon.code,
-      discountAmount: Number(discountAmount.toFixed(2)),
-      discountType: coupon.discountType,
-      isStackable: coupon.isStackable,
-      sponsor: coupon.sponsor,
-      sellerId: coupon.sellerId || null,
-    });
+    return res.status(200).json(result);
   } catch (error) {
-    console.error("Validate Coupon Error:", error);
-    res.status(500).json({ message: "Error validating coupon." });
+    // Pass the error to our new Global Error Handler
+    next(error);
   }
 };
 
@@ -201,12 +117,10 @@ export const toggleCouponStatus = async (req, res) => {
     if (!coupon) return res.status(404).json({ message: "Coupon not found" });
     coupon.isActive = !coupon.isActive;
     await coupon.save();
-    res
-      .status(200)
-      .json({
-        message: `Coupon ${coupon.isActive ? "Activated" : "Disabled"}!`,
-        coupon,
-      });
+    res.status(200).json({
+      message: `Coupon ${coupon.isActive ? "Activated" : "Disabled"}!`,
+      coupon,
+    });
   } catch (error) {
     res.status(500).json({ message: "Error updating coupon." });
   }

@@ -1,5 +1,6 @@
+// === src/pages/Wallet/SellerWallet.jsx ===
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import axiosInstance from "../../utils/axiosInstance.js";
 import {
   FaWallet,
   FaMoneyCheckAlt,
@@ -10,8 +11,6 @@ import {
   FaFileInvoiceDollar,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
-
-const API_URL = import.meta.env.VITE_API_URL;
 
 const SellerWallet = () => {
   const [stats, setStats] = useState(null);
@@ -24,13 +23,11 @@ const SellerWallet = () => {
 
   const fetchWalletStats = async () => {
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/orders/seller/wallet`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Cleaned up: axiosInstance handles the secure cookie automatically
+      const response = await axiosInstance.get("/orders/seller/wallet");
       setStats(response.data);
     } catch (error) {
-      toast.error("Failed to load wallet data");
+      toast.error(error.message || "Failed to load wallet data");
     } finally {
       setLoading(false);
     }

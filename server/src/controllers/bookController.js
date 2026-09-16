@@ -7,9 +7,30 @@ import { Book, Author, Genre, Review } from "../models/index.js";
 // ==========================================
 export const getAllBooks = async (req, res, next) => {
   try {
-    const { search, genre } = req.query;
-    const books = await BookService.getAllBooks(search, genre);
-    res.status(200).json(books);
+    const { search, genre, sellerId, page, limit } = req.query;
+
+    // 1. If pagination params are explicitly requested, return the full paginated object
+    if (page && limit) {
+      const result = await BookService.getAllBooks(
+        search,
+        genre,
+        sellerId,
+        page,
+        limit,
+      );
+      return res.status(200).json(result);
+    }
+
+    // 2. BACKWARD COMPATIBILITY: If no pagination requested (like from Storefront.jsx),
+    // return a flat array (capped at 500 for safety) to prevent breaking legacy components.
+    const result = await BookService.getAllBooks(
+      search,
+      genre,
+      sellerId,
+      1,
+      500,
+    );
+    return res.status(200).json(result.books);
   } catch (err) {
     next(err);
   }
@@ -82,13 +103,32 @@ export const updateBook = async (req, res, next) => {
         .json({ message: "Access Denied: You do not own this book." });
     }
 
-    const data = { ...req.body };
+    // SECURITY FIX: Mass Assignment Protection
+    // Extract ONLY fields the seller is allowed to update (Prevents overriding 'sellerId' or 'id')
+    const {
+      title,
+      description,
+      stock,
+      price,
+      discountPercentage,
+      authorId,
+      genreId,
+      imageUrl,
+    } = req.body;
+    const data = {
+      title,
+      description,
+      stock,
+      price,
+      discountPercentage,
+      authorId,
+      genreId,
+    };
 
-    // 🔥 FIX: Check for uploaded file OR external URL
     if (req.file) {
       data.image = req.file.path;
-    } else if (req.body.imageUrl) {
-      data.image = req.body.imageUrl;
+    } else if (imageUrl) {
+      data.image = imageUrl;
     }
 
     const updatedBook = await BookService.updateBook(req.params.id, data);
@@ -97,7 +137,6 @@ export const updateBook = async (req, res, next) => {
     next(err);
   }
 };
-
 // ==========================================
 // DELETE BOOK (Seller & Admin)
 // ==========================================
@@ -261,6 +300,56 @@ export const deleteBulkBooks = async (req, res, next) => {
       .status(200)
       .json({ message: `Successfully deleted ${deletedCount} books.` });
   } catch (err) {
+    next(err);
+  }
+};
+/// ==========================================
+// EXTERNAL PROXY (Google Books / OpenLibrary)
+// ==========================================
+// ==========================================
+// EXTERNAL PROXY (Google Books / OpenLibrary)
+// ==========================================
+export const lookupExternalBook = async (req, res, next) => {
+  try {
+    const { isbn, title } = req.query;
+    let fetchUrl = "";
+
+    // Server-side retrieval of the API key
+    const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
+
+    if (isbn) {
+      fetchUrl = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn.trim()}`;
+    } else if (title) {
+      fetchUrl = `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(title.trim())}&maxResults=15`;
+    } else {
+      return res
+        .status(400)
+        .json({ message: "ISBN or title parameter is required" });
+    }
+
+    if (apiKey) {
+      fetchUrl += `&key=${apiKey}`;
+    }
+
+    // Annoying console.log removed from here!
+
+    const externalRes = await fetch(fetchUrl);
+    const data = await externalRes.json();
+
+    if (!externalRes.ok) {
+      console.error(
+        "❌ [Proxy] Google API Error:",
+        data.error?.message || data,
+      );
+      return res.status(502).json({
+        message: "Failed to fetch data from Google.",
+        googleError: data.error?.message || "Unknown error",
+      });
+    }
+
+    res.status(200).json(data);
+  } catch (err) {
+    console.error("❌ [Proxy] Node Fetch Error:", err.message);
     next(err);
   }
 };

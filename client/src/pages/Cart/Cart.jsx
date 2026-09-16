@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import {
   FaShoppingCart,
@@ -10,84 +9,54 @@ import {
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SERVER_URL = API_URL.replace(/\/api\/?$/, "");
+// TanStack Query
+import { useCartQuery } from "../../hooks/queries/useCart.js";
+import {
+  useUpdateCartQuantity,
+  useRemoveFromCart,
+} from "../../hooks/mutations/useCartMutations.js";
+
+const SERVER_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "");
 
 const Cart = () => {
-  const [cartItems, setCartItems] = useState([]);
-  const [selectedItems, setSelectedItems] = useState([]); // Tracks which checkboxes are ticked!
-  const [loading, setLoading] = useState(true);
-  const [processingId, setProcessingId] = useState(null);
   const navigate = useNavigate();
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [processingId, setProcessingId] = useState(null);
 
+  // Server State via TanStack
+  const { data: cartItems = [], isLoading } = useCartQuery();
+  const { mutate: updateQuantity } = useUpdateCartQuantity();
+  const { mutate: removeItem } = useRemoveFromCart();
+
+  // Auto-select items when loaded
   useEffect(() => {
-    fetchCart();
-  }, []);
-
-  const fetchCart = async () => {
-    try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/cart`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const items = response.data.CartItems || [];
-      setCartItems(items);
-      // Auto-select all items by default when the cart loads
-      setSelectedItems(items.map((item) => item.id));
-    } catch (error) {
-      toast.error("Failed to load cart");
-    } finally {
-      setLoading(false);
+    if (cartItems.length > 0 && selectedItems.length === 0) {
+      setSelectedItems(cartItems.map((item) => item.id));
     }
+  }, [cartItems]);
+
+  const handleRemove = (itemId) => {
+    removeItem(itemId);
+    setSelectedItems((prev) => prev.filter((id) => id !== itemId));
   };
 
-  const handleRemove = async (itemId) => {
-    try {
-      const token = sessionStorage.getItem("token");
-      await axios.delete(`${API_URL}/cart/${itemId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      toast.success("Removed from cart");
-      setCartItems(cartItems.filter((item) => item.id !== itemId));
-      setSelectedItems(selectedItems.filter((id) => id !== itemId)); // Remove from selected list too
-    } catch (error) {
-      toast.error("Failed to remove item");
-    }
-  };
-
-  // --- NEW: Handle + and - Quantity Buttons ---
-  const handleQuantityChange = async (itemId, newQuantity) => {
+  const handleQuantityChange = (itemId, newQuantity) => {
     if (newQuantity < 1) return;
-    setProcessingId(itemId); // 🔥 Disable buttons for this item
-    try {
-      const token = sessionStorage.getItem("token");
-      await axios.put(
-        `${API_URL}/cart/${itemId}`,
-        { quantity: newQuantity },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      setCartItems(
-        cartItems.map((item) =>
-          item.id === itemId ? { ...item, quantity: newQuantity } : item,
-        ),
-      );
-    } catch (error) {
-      toast.error("Failed to update quantity");
-    } finally {
-      setProcessingId(null); // 🔥 Re-enable buttons
-    }
+    setProcessingId(itemId);
+    updateQuantity(
+      { itemId, quantity: newQuantity },
+      { onSettled: () => setProcessingId(null) },
+    );
   };
 
-  // --- NEW: Handle Checkbox Toggles ---
   const toggleSelection = (itemId) => {
     if (selectedItems.includes(itemId)) {
-      setSelectedItems(selectedItems.filter((id) => id !== itemId)); // Uncheck
+      setSelectedItems(selectedItems.filter((id) => id !== itemId));
     } else {
-      setSelectedItems([...selectedItems, itemId]); // Check
+      setSelectedItems([...selectedItems, itemId]);
     }
   };
 
-  // --- E-COMMERCE MATH (ONLY APPLIES TO SELECTED ITEMS NOW!) ---
   const calculateItemPrice = (book) => {
     const base = Number(book.price) || 0;
     const disc = book.discountPercentage || 0;
@@ -109,17 +78,12 @@ const Cart = () => {
     if (selectedItems.length === 0) {
       return toast.error("Please select at least one item to checkout!");
     }
-
-    // Pass BOTH the selected IDs and the calculated subtotal securely
     navigate("/checkout", {
-      state: {
-        selectedCartItemIds: selectedItems,
-        cartSubtotal: subtotal, // <-- 1. ADD THIS LINE
-      },
+      state: { selectedCartItemIds: selectedItems, cartSubtotal: subtotal },
     });
   };
 
-  if (loading)
+  if (isLoading)
     return (
       <div className="text-center mt-5">
         <div className="spinner-border text-primary"></div>
@@ -152,7 +116,6 @@ const Cart = () => {
                   key={item.id}
                   className={`card mb-3 shadow-sm position-relative ${isSelected ? "border-primary" : "border-light"}`}
                 >
-                  {/* NEW: Checkbox to select/deselect item */}
                   <div
                     className="position-absolute top-50 start-0 translate-middle-y ms-3"
                     style={{ zIndex: 10 }}
@@ -165,7 +128,6 @@ const Cart = () => {
                       onChange={() => toggleSelection(item.id)}
                     />
                   </div>
-
                   <button
                     onClick={() => handleRemove(item.id)}
                     className="btn btn-sm btn-outline-danger position-absolute top-0 end-0 m-2"
@@ -210,9 +172,7 @@ const Cart = () => {
                           </span>
                         )}
                       </div>
-
                       <div className="d-flex justify-content-between align-items-end mt-auto">
-                        {/* NEW: Quantity Controls (+ / -) */}
                         <div className="d-flex align-items-center gap-3 bg-light rounded px-2 py-1 border">
                           <button
                             className="btn btn-sm text-secondary p-1"
@@ -221,13 +181,11 @@ const Cart = () => {
                             }
                             disabled={
                               item.quantity <= 1 || processingId === item.id
-                            } // 🔥 Updated
+                            }
                           >
                             <FaMinus size={12} />
                           </button>
-
                           <span className="fw-bold fs-5">{item.quantity}</span>
-
                           <button
                             className="btn btn-sm text-secondary p-1"
                             onClick={() =>
@@ -236,12 +194,11 @@ const Cart = () => {
                             disabled={
                               item.quantity >= item.Book.stock ||
                               processingId === item.id
-                            } // 🔥 Updated
+                            }
                           >
                             <FaPlus size={12} />
                           </button>
                         </div>
-
                         <div className="text-end">
                           <span className="text-muted small d-block">
                             Subtotal

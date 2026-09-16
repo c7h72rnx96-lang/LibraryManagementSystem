@@ -1,11 +1,12 @@
-import React, { useContext } from "react"; // 🔥 1. Added useContext
+import React, { useContext } from "react";
 import { Routes, Route } from "react-router-dom";
-import { AuthContext } from "./context/AuthContext.jsx"; // 🔥 2. Imported AuthContext
+import { AuthContext } from "./context/AuthContext.jsx";
 
 import Login from "./pages/Login/Login.jsx";
 import Register from "./pages/Register/Register.jsx";
 import DashboardLayout from "./layouts/DashboardLayout.jsx";
 import ProtectedRoute from "./components/ProtectedRoute/ProtectedRoute.jsx";
+import PublicOnlyRoute from "./components/ProtectedRoute/PublicOnlyRoute.jsx";
 import Cart from "./pages/Cart/Cart.jsx";
 import Checkout from "./pages/Checkout/Checkout.jsx";
 import Orders from "./pages/Orders/Orders.jsx";
@@ -33,13 +34,26 @@ import AuditLogs from "./pages/Admin/AuditLogs.jsx";
 import CustomerSupport from "./pages/Support/CustomerSupport.jsx";
 
 function App() {
-  // 🔥 3. Get the logged-in user to check their role
   const { user } = useContext(AuthContext);
 
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route
+        path="/login"
+        element={
+          <PublicOnlyRoute>
+            <Login />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <PublicOnlyRoute>
+            <Register />
+          </PublicOnlyRoute>
+        }
+      />
 
       <Route
         path="/"
@@ -49,7 +63,6 @@ function App() {
           </ProtectedRoute>
         }
       >
-        {/* 🔥 4. SHOW CUSTOMER DASHBOARD IF THEY ARE A CUSTOMER, OTHERWISE SHOW STANDARD DASHBOARD */}
         <Route
           index
           element={
@@ -57,31 +70,150 @@ function App() {
           }
         />
 
-        <Route path="genres" element={<Genres />} />
-        <Route path="authors" element={<Authors />} />
+        {/* ========================================== */}
+        {/* PUBLIC & SHARED AUTHENTICATED ROUTES       */}
+        {/* ========================================== */}
         <Route path="books" element={<Books />} />
+        <Route path="books/:id" element={<BookDetails />} />
         <Route path="cart" element={<Cart />} />
         <Route path="checkout" element={<Checkout />} />
-        <Route path="manage-orders" element={<AdminOrders />} />
-        <Route path="manage-orders/:id" element={<OrderDetails />} />
-        <Route path="manage-users" element={<UserManagement />} />
-        <Route path="manage-users/:id" element={<UserDetails />} />
-        <Route path="store-orders" element={<SellerOrders />} />
-        {/* I ADDED THE PROFILE ROUTE RIGHT HERE! */}
-        <Route path="profile" element={<Profile />} />
-        <Route path="wallet" element={<SellerWallet />} />
-        <Route path="/books/bulk" element={<BulkUpload />} />
         <Route path="orders" element={<Orders />} />
-        <Route path="books/add" element={<AddBook />} />
-        <Route path="books/edit/:id" element={<AddBook />} />
-        <Route path="books/:id" element={<BookDetails />} />
+        <Route path="profile" element={<Profile />} />
         <Route path="wishlist" element={<Wishlist />} />
-        <Route path="coupons" element={<Coupons />} />
-        <Route path="/store/:sellerId" element={<Storefront />} />
-        <Route path="/seller/books" element={<SellerInventory />} />
-        <Route path="admin/payouts" element={<AdminPayouts />} />
-        <Route path="admin/logs" element={<AuditLogs />} />
-        <Route path="/support" element={<CustomerSupport />} />
+        <Route path="support" element={<CustomerSupport />} />
+        <Route path="store/:sellerId" element={<Storefront />} />
+
+        {/* ========================================== */}
+        {/* ADMIN ONLY ROUTES                          */}
+        {/* ========================================== */}
+        <Route
+          path="manage-orders"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <AdminOrders />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="manage-orders/:id"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <OrderDetails />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="manage-users"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <UserManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="manage-users/:id"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <UserDetails />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="coupons"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <Coupons />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/payouts"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <AdminPayouts />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/logs"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <AuditLogs />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="genres"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <Genres />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="authors"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <Authors />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ========================================== */}
+        {/* SELLER ONLY ROUTES                         */}
+        {/* ========================================== */}
+        <Route
+          path="store-orders"
+          element={
+            <ProtectedRoute allowedRoles={["seller"]}>
+              <SellerOrders />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="wallet"
+          element={
+            <ProtectedRoute allowedRoles={["seller"]}>
+              <SellerWallet />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="seller/books"
+          element={
+            <ProtectedRoute allowedRoles={["seller"]}>
+              <SellerInventory />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ========================================== */}
+        {/* ADMIN & SELLER SHARED ROUTES               */}
+        {/* ========================================== */}
+        <Route
+          path="books/add"
+          element={
+            <ProtectedRoute allowedRoles={["admin", "seller"]}>
+              <AddBook />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="books/edit/:id"
+          element={
+            <ProtectedRoute allowedRoles={["admin", "seller"]}>
+              <AddBook />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="books/bulk"
+          element={
+            <ProtectedRoute allowedRoles={["admin", "seller"]}>
+              <BulkUpload />
+            </ProtectedRoute>
+          }
+        />
       </Route>
     </Routes>
   );

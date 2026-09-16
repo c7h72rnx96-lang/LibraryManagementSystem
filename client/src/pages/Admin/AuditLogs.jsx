@@ -1,9 +1,8 @@
+// === src/pages/Admin/AuditLogs.jsx ===
 import React, { useState, useEffect } from "react";
-import axios from "axios";
-import { FaShieldAlt, FaUserShield, FaHistory } from "react-icons/fa";
+import axiosInstance from "../../utils/axiosInstance.js";
+import { FaShieldAlt, FaUserShield } from "react-icons/fa";
 import toast from "react-hot-toast";
-
-const API_URL = import.meta.env.VITE_API_URL;
 
 const AuditLogs = () => {
   const [logs, setLogs] = useState([]);
@@ -15,13 +14,11 @@ const AuditLogs = () => {
 
   const fetchLogs = async () => {
     try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/admin/logs`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Cleaned up: axiosInstance handles the secure cookie automatically
+      const response = await axiosInstance.get("/admin/logs");
       setLogs(response.data);
     } catch (error) {
-      toast.error("Failed to fetch security logs.");
+      toast.error(error.message || "Failed to fetch security logs.");
     } finally {
       setLoading(false);
     }

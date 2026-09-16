@@ -1,11 +1,11 @@
 import React, { useContext } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext.jsx";
 
-const ProtectedRoute = ({ children }) => {
+const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useContext(AuthContext);
+  const location = useLocation();
 
-  // 1. Show loading state while checking for token
   if (loading) {
     return (
       <div className="container mt-5 text-center">
@@ -16,12 +16,16 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-  // 2. Redirect to login if no user is found
   if (!user) {
-    return <Navigate to="/login" replace />;
+    // Remember where they were going
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 3. Render the protected page if user is logged in
+  // 🔥 NEW: Check if the user has the required role for this specific route
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    return <Navigate to="/" replace />;
+  }
+
   return children;
 };
 

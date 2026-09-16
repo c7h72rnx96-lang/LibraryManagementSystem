@@ -2,100 +2,164 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import { config } from "./config/index.js";
-import { User, Conversation, ChatMessage } from "./models/index.js";
-import { Op } from "sequelize";
+import { User } from "./models/index.js";
+import { ChatService } from "./services/ChatService.js";
+
+let ioInstance;
+const onlineUsers = new Set();
+
+// Rate Limiters to prevent DB/Server crash from spam
+const messageRateLimiter = new Map();
+const typingRateLimiter = new Map();
+
+export const emitToUser = (userId, event, data) => {
+  if (ioInstance) ioInstance.to(`user_${userId}`).emit(event, data);
+};
 
 export const initializeSockets = (httpServer) => {
-  const io = new Server(httpServer, {
+  ioInstance = new Server(httpServer, {
     cors: {
-      origin: ["http://localhost:5173", process.env.FRONTEND_URL],
+      origin: [process.env.FRONTEND_URL || "http://localhost:5173"],
       methods: ["GET", "POST"],
       credentials: true,
     },
   });
 
-  const connectedUsers = new Map();
-
-  io.use(async (socket, next) => {
+  // Strict Authentication via HttpOnly Cookie (Native parsing to prevent crashes)
+  ioInstance.use(async (socket, next) => {
     try {
-      const token = socket.handshake.auth.token;
-      if (!token) return next(new Error("Authentication error: Token missing"));
+      const cookieHeader = socket.handshake.headers.cookie || "";
+      const cookies = {};
+      cookieHeader.split(";").forEach((c) => {
+        const [key, value] = c.split("=").map((v) => v.trim());
+        if (key) cookies[key] = value;
+      });
 
-      const decoded = jwt.verify(token, config.jwt.secret);
+      if (!cookies.token) {
+        console.error("🔴 Socket Auth: Token missing from cookies");
+        return next(new Error("Authentication error: Token missing"));
+      }
+
+      const decoded = jwt.verify(cookies.token, config.jwt.secret);
       const user = await User.findByPk(decoded.id);
 
-      if (!user || user.isBlocked)
+      if (!user || user.isBlocked) {
+        console.error("🔴 Socket Auth: User invalid or suspended");
         return next(new Error("User invalid or suspended"));
+      }
 
       socket.user = user;
       next();
     } catch (err) {
+      console.error("🔥 Socket Auth Exception:", err.message);
       next(new Error("Authentication error"));
     }
   });
 
-  io.on("connection", (socket) => {
+  ioInstance.on("connection", (socket) => {
     const userId = socket.user.id;
-    connectedUsers.set(userId, socket.id);
 
-    socket.on("send_message", async (data) => {
-      try {
-        const { receiverId, message } = data;
+    // Join secure personal room
+    socket.join(`user_${userId}`);
+    onlineUsers.add(userId);
+    ioInstance.emit("presence:update", Array.from(onlineUsers));
 
-        if (userId === Number(receiverId)) {
-          return socket.emit("error", { message: "Cannot message yourself." });
-        }
+    // 📩 HANDLE NEW MESSAGES
+    socket.on("message:send", async (payload, callback) => {
+      // 🛡️ ABUSE PROTECTION: Max 5 messages per 2 seconds
+      const now = Date.now();
+      const userTimestamps = messageRateLimiter.get(userId) || [];
+      const recent = userTimestamps.filter((t) => now - t < 2000);
 
-        let conversation = await Conversation.findOne({
-          where: {
-            [Op.or]: [
-              { participant1Id: userId, participant2Id: receiverId },
-              { participant1Id: receiverId, participant2Id: userId },
-            ],
-          },
-        });
-
-        if (!conversation) {
-          conversation = await Conversation.create({
-            participant1Id: userId,
-            participant2Id: receiverId,
+      if (recent.length >= 5) {
+        if (typeof callback === "function") {
+          callback({
+            success: false,
+            error: { message: "Slow down! You're sending messages too fast." },
           });
         }
+        return;
+      }
 
-        const savedMessage = await ChatMessage.create({
-          conversationId: conversation.id,
+      recent.push(now);
+      messageRateLimiter.set(userId, recent);
+
+      try {
+        const { receiverId, message } = payload;
+
+        // Save to DB and Authorize securely
+        const savedMessage = await ChatService.saveAndAuthorizeMessage(
+          userId,
+          receiverId,
+          message,
+        );
+
+        // 🔥 Safely serialize the Sequelize DB object for cross-network Socket delivery
+        const plainMessage = savedMessage.get
+          ? savedMessage.get({ plain: true })
+          : savedMessage;
+
+        // Emit to the recipient
+        socket.to(`user_${receiverId}`).emit("message:new", plainMessage);
+
+        // 🔔 Emit Global Notification for Unread Counts/Toasts
+        socket.to(`user_${receiverId}`).emit("notification:new", {
+          title: `New message from ${socket.user.username}`,
+          message:
+            message.substring(0, 40) + (message.length > 40 ? "..." : ""),
           senderId: userId,
-          message: message,
         });
 
-        const populatedMessage = await ChatMessage.findByPk(savedMessage.id, {
-          include: [
-            {
-              model: User,
-              as: "Sender",
-              attributes: ["id", "username", "avatar", "role"],
-            },
-          ],
-        });
-
-        // Send to receiver if online
-        const receiverSocketId = connectedUsers.get(Number(receiverId));
-        if (receiverSocketId) {
-          io.to(receiverSocketId).emit("receive_message", populatedMessage);
+        // Send success back to React!
+        if (typeof callback === "function") {
+          callback({ success: true, data: plainMessage });
         }
-
-        // Send confirmation back to sender
-        socket.emit("message_sent", populatedMessage);
       } catch (error) {
-        console.error("Socket send error:", error);
-        socket.emit("error", { message: "Failed to transmit message." });
+        if (typeof callback === "function") {
+          callback({ success: false, error: { message: error.message } });
+        }
       }
     });
 
-    socket.on("disconnect", () => {
-      connectedUsers.delete(userId);
+    // 📖 HANDLE READ RECEIPTS
+    socket.on("message:read", async ({ conversationId }) => {
+      // Block crash if frontend tries to pass an undefined ID
+      if (!conversationId) return;
+
+      try {
+        await ChatService.markAsRead(userId, conversationId);
+      } catch (error) {
+        console.error("Read status error:", error);
+      }
+    });
+
+    // ✍️ HANDLE TYPING INDICATORS
+    socket.on("typing:start", ({ receiverId }) => {
+      // 🛡️ ABUSE PROTECTION: Throttle typing emit to 1 per second
+      const lastTyping = typingRateLimiter.get(userId) || 0;
+      if (Date.now() - lastTyping > 1000) {
+        typingRateLimiter.set(userId, Date.now());
+        socket
+          .to(`user_${receiverId}`)
+          .emit("typing:status", { senderId: userId, isTyping: true });
+      }
+    });
+
+    socket.on("typing:stop", ({ receiverId }) => {
+      socket
+        .to(`user_${receiverId}`)
+        .emit("typing:status", { senderId: userId, isTyping: false });
+    });
+
+    // 🔌 HANDLE DISCONNECT
+    socket.on("disconnect", async () => {
+      const sockets = await ioInstance.in(`user_${userId}`).fetchSockets();
+      if (sockets.length === 0) {
+        onlineUsers.delete(userId);
+        ioInstance.emit("presence:update", Array.from(onlineUsers));
+        messageRateLimiter.delete(userId);
+        typingRateLimiter.delete(userId);
+      }
     });
   });
-
-  return io;
 };

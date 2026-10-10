@@ -31,12 +31,14 @@ app.use(cookieParser()); // <-- NEW: Required for HttpOnly cookies
 app.use("/api/", apiLimiter);
 
 // Explicit CORS setup for cross-domain cookies
+// Explicit CORS setup for cross-domain cookies
 const allowedOrigins = [
   "http://localhost:5173",
-  "[https://friendly-creponne-7f3883.netlify.app](https://friendly-creponne-7f3883.netlify.app)",
-  "[https://librarymanagementsystem-2-qqad.onrender.com](https://librarymanagementsystem-2-qqad.onrender.com)",
-  "[https://aashish7.me](https://aashish7.me)",
-  "[https://www.aashish7.me](https://www.aashish7.me)",
+  "http://localhost:5174",
+  "https://friendly-creponne-7f3883.netlify.app",
+  "https://librarymanagementsystem-2-qqad.onrender.com",
+  "https://aashish7.me",
+  "https://www.aashish7.me",
 ];
 
 app.use(

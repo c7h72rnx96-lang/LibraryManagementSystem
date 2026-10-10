@@ -19,7 +19,11 @@ export const emitToUser = (userId, event, data) => {
 export const initializeSockets = (httpServer) => {
   ioInstance = new Server(httpServer, {
     cors: {
-      origin: [process.env.FRONTEND_URL || "http://localhost:5173"],
+      origin: [
+        process.env.FRONTEND_URL || "http://localhost:5173",
+        "https://aashish7.me",
+        "https://www.aashish7.me",
+      ],
       methods: ["GET", "POST"],
       credentials: true,
     },
